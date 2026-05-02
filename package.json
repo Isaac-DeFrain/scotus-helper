@@ -1,9 +1,13 @@
 {
 	"name": "scotus-opinion-helper",
 	"version": "0.1.0",
+	"type": "module",
 	"private": true,
 	"scripts": {
 		"lint": "eslint .",
+		"test": "jest",
+		"test:db": "jest src/db.test.ts",
+		"test:utils": "jest src/libs/opinionUtils.test.ts",
 		"scrape-opinions": "npx ts-node scripts/scrapeOpinions.ts",
 		"upload-opinions": "npx ts-node scripts/uploadOpinions.ts"
 	},
@@ -20,9 +24,12 @@
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
 		"@types/better-sqlite3": "^7.6.13",
+		"@types/jest": "^30.0.0",
 		"@types/node": "^25.6.0",
 		"@types/pdf-parse": "^1.1.5",
 		"eslint": "^10.3.0",
+		"jest": "^30.3.0",
+		"ts-jest": "^29.4.9",
 		"ts-node": "^10.9.2",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.59.1"
