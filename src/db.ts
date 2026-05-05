@@ -7,6 +7,8 @@
 import BetterSqlite3 from "better-sqlite3";
 import { ColumnType, Generated, Kysely, SqliteDialect } from "kysely";
 import { OpinionType } from "./libs/opinionUtils";
+import fs from "fs";
+import path from "path";
 
 /**
  * Opinions table schema
@@ -113,6 +115,14 @@ export interface OpinionFilter {
  * @returns A Kysely database connection
  */
 export function openDb(dbPath: string): Kysely<AppDatabase> {
+    console.debug("Opening database connection to:", dbPath);
+
+    if (!fs.existsSync(dbPath)) {
+        console.debug("Database file does not exist. Creating:", dbPath);
+        fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+        fs.writeFileSync(dbPath, "");
+    }
+
     const sqlite = new BetterSqlite3(dbPath);
     sqlite.exec(DDL);
 
