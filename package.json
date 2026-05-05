@@ -8,7 +8,7 @@
 		"test": "jest",
 		"test:db": "jest src/db.test.ts",
 		"test:utils": "jest src/libs/opinionUtils.test.ts",
-		"scrape-opinions": "tsx scripts/scrapeOpinions.ts",
+		"scrape-opinions": "tsx scripts/scrape/opinions.ts",
 		"upload-opinions": "tsx scripts/uploadOpinions.ts"
 	},
 	"dependencies": {

@@ -13,14 +13,12 @@
  * Requires: OPENAI_API_KEY in .env
  */
 
-import * as fs from "fs";
-import * as path from "path";
 import axios from "axios";
-import * as cheerio from "cheerio";
 import { PDFParse } from "pdf-parse";
 import OpenAI from "openai";
 import dotenv from "dotenv";
-import { chunkText } from "../src/libs/chunking";
+
+import { chunkText } from "../../src/libs/chunking";
 import {
     BASE_URL,
     CHUNK_OVERLAP,
@@ -28,11 +26,13 @@ import {
     DELAY_MS,
     EMBEDDING_DIMENSIONS,
     EMBEDDING_MODEL,
-    OPINIONS_DIR,
     DB_PATH,
-} from "../src/constants";
-import { openDb } from "../src/db";
-import { buildFilename, type OpinionMetaData } from "../src/libs/opinionUtils";
+} from "../../src/constants";
+import { openDb } from "../../src/db";
+import { type OpinionMetaData } from "../../src/libs/opinionUtils";
+import { colorLabel, delay, saveJsonBackup } from "./utils";
+import { parseMeritsListingPage } from "./merits";
+import { parseOrdersListingPage } from "./orders";
 
 dotenv.config();
 
@@ -44,7 +44,6 @@ if (missing.length > 0) {
     process.exit(1);
 }
 
-// Parse command line arguments
 const termArg = process.argv.indexOf("--term");
 const TERM_YEAR: number = (() => {
     if (termArg !== -1 && process.argv[termArg + 1]) {
@@ -52,158 +51,17 @@ const TERM_YEAR: number = (() => {
         if (!isNaN(val)) return val;
     }
 
-    // default to current 2-digit term year
     const currentDate = new Date();
     const currentYear = currentDate.getFullYear();
     const currentTermYear = currentDate.getMonth() <= 10 ? currentYear - 1 : currentYear;
     return currentTermYear % 100;
 })();
 
-// SCOTUS opinion sources
 const SOURCES: { type: OpinionMetaData["opinionType"]; path: string }[] = [
     { type: "merits", path: `/opinions/slipopinion/${TERM_YEAR}` },
     { type: "orders", path: `/opinions/relatingtoorders/${TERM_YEAR}` },
 ];
 
-const MERITS_NUM_COLS = 6;
-const ORDERS_NUM_COLS = 5;
-
-const ANSI = {
-    cyan: "\x1b[36m",
-    yellow: "\x1b[33m",
-    reset: "\x1b[0m",
-} as const;
-
-type OpinionType = OpinionMetaData["opinionType"];
-
-const TYPE_COLOR: Record<OpinionType, string> = {
-    merits: ANSI.cyan,
-    orders: ANSI.yellow,
-};
-
-function colorLabel(type: OpinionType): string {
-    return `${TYPE_COLOR[type]}[${type}]${ANSI.reset}`;
-}
-
-function buildPdfUrl(relativeUrl: string): string {
-    return relativeUrl.startsWith("http")
-        ? relativeUrl
-        : `${BASE_URL}${relativeUrl.startsWith("/") ? "" : "/"}${relativeUrl}`;
-}
-
-/**
- * Parse the merits opinion listing page (6-column table).
- * Columns: #, Date, Docket, Case Name (PDF link), Justice, Citation
- *
- * @param html - The HTML of the listing page
- * @returns An array of merits opinion metadata
- */
-function parseMeritsListingPage(html: string): OpinionMetaData[] {
-    const $ = cheerio.load(html);
-    const opinions: OpinionMetaData[] = [];
-
-    $("table tr").each((_i, row) => {
-        const cells = $(row).find("td");
-        if (cells.length !== MERITS_NUM_COLS) return;
-
-        const opinionNumber = parseInt($(cells[0]).text().trim(), 10);
-        if (isNaN(opinionNumber)) return;
-
-        const date = $(cells[1]).text().trim();
-        const docket = $(cells[2]).text().trim();
-        const nameCell = $(cells[3]);
-        const caseName = nameCell.find("a").first().text().trim();
-        const relativeUrl = nameCell.find("a").first().attr("href") ?? "";
-        const justice = $(cells[4]).text().trim();
-        const citation = $(cells[5]).text().trim();
-
-        if (!caseName || !relativeUrl || !docket) return;
-
-        opinions.push({
-            opinionNumber,
-            opinionType: "merits",
-            termYear: TERM_YEAR,
-            date,
-            docket,
-            caseName,
-            justice,
-            citation,
-            pdfUrl: buildPdfUrl(relativeUrl),
-        });
-    });
-
-    return opinions;
-}
-
-/**
- * Parse the orders opinion listing page (5-column table).
- * Columns: Date, Docket, Case Name (PDF link), Justice, Citation
- *
- * @param html - The HTML of the listing page
- * @returns An array of orders opinion metadata
- */
-function parseOrdersListingPage(html: string): OpinionMetaData[] {
-    const $ = cheerio.load(html);
-    const opinions: OpinionMetaData[] = [];
-
-    $("table tr").each((_i, row) => {
-        const cells = $(row).find("td");
-        if (cells.length !== ORDERS_NUM_COLS) return;
-
-        const date = $(cells[0]).text().trim();
-        const docket = $(cells[1]).text().trim();
-        const nameCell = $(cells[2]);
-        const caseName = nameCell.find("a").first().text().trim();
-        const relativeUrl = nameCell.find("a").first().attr("href") ?? "";
-        const justice = $(cells[3]).text().trim();
-        const citation = $(cells[4]).text().trim();
-
-        if (!caseName || !relativeUrl || !docket) return;
-
-        opinions.push({
-            opinionType: "orders",
-            termYear: TERM_YEAR,
-            date,
-            docket,
-            caseName,
-            justice,
-            citation,
-            pdfUrl: buildPdfUrl(relativeUrl),
-        });
-    });
-
-    return opinions;
-}
-
-/**
- * Save the opinion metadata to a JSON file under
- * {OPINIONS_DIR}/{opinionType}/{termYear}/
- *
- * @param meta - The opinion metadata
- */
-function saveJsonBackup(meta: OpinionMetaData): void {
-    const date = new Date(meta.date);
-    const typeDir = path.join(OPINIONS_DIR, meta.opinionType, date.getFullYear().toString());
-
-    fs.mkdirSync(typeDir, { recursive: true });
-    fs.writeFileSync(path.join(typeDir, buildFilename(meta)), JSON.stringify(meta, null, 2));
-}
-
-/**
- * Delay for a given number of milliseconds
- *
- * @param ms - The number of milliseconds to delay
- * @returns A promise that resolves after the delay
- */
-function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Scrape the opinions from the SCOTUS website
- *
- * @returns A promise that resolves when the opinions are scraped
- */
 async function scrapeOpinions(): Promise<void> {
     const db = openDb(DB_PATH);
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -227,15 +85,14 @@ async function scrapeOpinions(): Promise<void> {
 
             const opinions =
                 source.type === "merits"
-                    ? parseMeritsListingPage(listingHtml)
-                    : parseOrdersListingPage(listingHtml);
+                    ? parseMeritsListingPage(listingHtml, TERM_YEAR)
+                    : parseOrdersListingPage(listingHtml, TERM_YEAR);
             console.log(`  Found ${opinions.length} ${source.type} opinions`);
 
             for (const meta of opinions) {
                 const msg = `  ${colorLabel(meta.opinionType)} ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
                 console.log(msg);
 
-                // Download PDF
                 let pdfBuffer: Buffer;
                 try {
                     const pdfRes = await axios.get<ArrayBuffer>(meta.pdfUrl, {
@@ -249,7 +106,6 @@ async function scrapeOpinions(): Promise<void> {
                     continue;
                 }
 
-                // Extract text
                 let text: string;
                 try {
                     const parser = new PDFParse({ data: pdfBuffer });
@@ -263,7 +119,6 @@ async function scrapeOpinions(): Promise<void> {
                     continue;
                 }
 
-                // Persist raw opinion
                 try {
                     await db
                         .insertInto("opinions")
@@ -311,7 +166,6 @@ async function scrapeOpinions(): Promise<void> {
                     continue;
                 }
 
-                // Chunk + embed
                 const sourceKey = `opinion:${meta.docket}`;
                 const chunks = chunkText(text, CHUNK_SIZE, CHUNK_OVERLAP, sourceKey);
 
@@ -331,7 +185,6 @@ async function scrapeOpinions(): Promise<void> {
                     continue;
                 }
 
-                // Persist chunks
                 let chunkErrors = 0;
                 for (let i = 0; i < chunks.length; i++) {
                     const chunk = chunks[i];
