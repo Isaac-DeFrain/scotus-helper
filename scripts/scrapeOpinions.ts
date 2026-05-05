@@ -68,6 +68,23 @@ const SOURCES: { type: OpinionMetaData["opinionType"]; path: string }[] = [
 const MERITS_NUM_COLS = 6;
 const ORDERS_NUM_COLS = 5;
 
+const ANSI = {
+    cyan: "\x1b[36m",
+    yellow: "\x1b[33m",
+    reset: "\x1b[0m",
+} as const;
+
+type OpinionType = OpinionMetaData["opinionType"];
+
+const TYPE_COLOR: Record<OpinionType, string> = {
+    merits: ANSI.cyan,
+    orders: ANSI.yellow,
+};
+
+function colorLabel(type: OpinionType): string {
+    return `${TYPE_COLOR[type]}[${type}]${ANSI.reset}`;
+}
+
 function buildPdfUrl(relativeUrl: string): string {
     return relativeUrl.startsWith("http")
         ? relativeUrl
@@ -215,7 +232,7 @@ async function scrapeOpinions(): Promise<void> {
             console.log(`  Found ${opinions.length} ${source.type} opinions`);
 
             for (const meta of opinions) {
-                const msg = `  [${meta.opinionType}] ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
+                const msg = `  ${colorLabel(meta.opinionType)} ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
                 console.log(msg);
 
                 // Download PDF
