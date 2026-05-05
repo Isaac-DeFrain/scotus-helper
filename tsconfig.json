@@ -1,9 +1,4 @@
 {
-	"ts-node": {
-		"compilerOptions": {
-			"module": "commonjs"
-		}
-	},
 	"compilerOptions": {
 		"target": "ES2022",
 		"lib": ["esnext"],
