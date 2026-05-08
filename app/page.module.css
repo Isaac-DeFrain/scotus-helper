@@ -1,0 +1,103 @@
+.container {
+	min-height: 100vh;
+	padding: 2rem;
+	max-width: 64rem;
+	margin: 0 auto;
+}
+
+.title {
+	font-size: 1.875rem;
+	line-height: 2.25rem;
+	font-weight: 700;
+	margin: 0 0 2rem;
+}
+
+.panel {
+	border: 1px solid var(--border);
+	border-radius: 0.75rem;
+	padding: 1rem;
+	background: var(--panel);
+}
+
+.panelTitle {
+	font-size: 1.25rem;
+	line-height: 1.75rem;
+	font-weight: 600;
+	margin: 0 0 1rem;
+}
+
+.messages {
+	height: 24rem;
+	overflow-y: auto;
+	margin-bottom: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.welcome {
+	color: var(--muted);
+	text-align: center;
+	padding: 2rem 0;
+}
+
+.welcomeText {
+	margin: 0;
+}
+
+.message {
+	padding: 0.75rem;
+	border-radius: 0.75rem;
+	border: 1px solid var(--border);
+}
+
+.messageHeader {
+	font-weight: 600;
+	margin: 0 0 0.25rem;
+}
+
+.messageBody {
+	white-space: pre-wrap;
+	margin: 0;
+}
+
+.user {
+	background: var(--user);
+	margin-left: 2rem;
+}
+
+.assistant {
+	background: var(--assistant);
+	margin-right: 2rem;
+}
+
+.form {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.input {
+	flex: 1;
+	padding: 0.625rem 0.75rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--border);
+	background: #fff;
+}
+
+.button {
+	padding: 0.625rem 1rem;
+	border-radius: 0.5rem;
+	border: 1px solid transparent;
+	color: #fff;
+	cursor: pointer;
+}
+
+.button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.sendButton {
+	background: var(--green);
+}
+

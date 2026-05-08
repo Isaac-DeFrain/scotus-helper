@@ -45,7 +45,27 @@ npm run upload-opinions                 # push vectors to Weaviate
 npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
 ```
 
-### Dockerized scripts
+## Web UI (chat)
+
+After you’ve uploaded opinion chunks to Weaviate, you can run a small Next.js UI
+that streams answers from OpenAI using retrieved opinion excerpts as context.
+
+Set environment variables in `.env`:
+
+```shell
+OPENAI_API_KEY=your-openai-api-key
+WEAVIATE_URL=http://localhost:8080
+```
+
+Run the app:
+
+```shell
+npm run dev
+```
+
+Then open `http://localhost:3000`.
+
+## Dockerized scripts
 
 The repo includes a `Dockerfile` so you can run the scripts in a container while keeping Weaviate in Docker.
 
