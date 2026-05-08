@@ -2,18 +2,21 @@ import * as fs from "fs";
 import * as path from "path";
 
 import { OPINIONS_DIR, BASE_URL } from "../../src/constants";
-import { buildFilename, type OpinionMetaData } from "../../src/libs/opinionUtils";
+import {
+  buildFilename,
+  type OpinionMetaData,
+} from "../../src/libs/opinionUtils";
 
 export type OpinionType = OpinionMetaData["opinionType"];
 
 export function buildPdfUrl(relativeUrl: string): string {
-    return relativeUrl.startsWith("http")
-        ? relativeUrl
-        : `${BASE_URL}${relativeUrl.startsWith("/") ? "" : "/"}${relativeUrl}`;
+  return relativeUrl.startsWith("http")
+    ? relativeUrl
+    : `${BASE_URL}${relativeUrl.startsWith("/") ? "" : "/"}${relativeUrl}`;
 }
 
 export function delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -21,9 +24,16 @@ export function delay(ms: number): Promise<void> {
  * {OPINIONS_DIR}/{opinionType}/{termYear}/
  */
 export function saveJsonBackup(meta: OpinionMetaData): void {
-    const date = new Date(meta.date);
-    const typeDir = path.join(OPINIONS_DIR, meta.opinionType, date.getFullYear().toString());
+  const date = new Date(meta.date);
+  const typeDir = path.join(
+    OPINIONS_DIR,
+    meta.opinionType,
+    date.getFullYear().toString(),
+  );
 
-    fs.mkdirSync(typeDir, { recursive: true });
-    fs.writeFileSync(path.join(typeDir, buildFilename(meta)), JSON.stringify(meta, null, 2));
+  fs.mkdirSync(typeDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(typeDir, buildFilename(meta)),
+    JSON.stringify(meta, null, 2),
+  );
 }

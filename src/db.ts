@@ -14,25 +14,25 @@ import path from "path";
  * Opinions table schema
  */
 export interface OpinionsTable {
-    id: Generated<number>;
-    opinion_number: number | null; // absent for orders opinions
-    opinion_type: OpinionType;
-    term_year: number;
-    date: string;
-    docket: string;
-    case_name: string;
-    justice: string;
-    citation: string;
-    pdf_url: string;
-    text: string;
-    created_at: ColumnType<string, string | undefined, never>;
+  id: Generated<number>;
+  opinion_number: number | null; // absent for orders opinions
+  opinion_type: OpinionType;
+  term_year: number;
+  date: string;
+  docket: string;
+  case_name: string;
+  justice: string;
+  citation: string;
+  pdf_url: string;
+  text: string;
+  created_at: ColumnType<string, string | undefined, never>;
 }
 
 /**
  * App database schema
  */
 export interface AppDatabase {
-    opinions: OpinionsTable;
+  opinions: OpinionsTable;
 }
 
 /**
@@ -59,23 +59,23 @@ const DDL = `
  * Opinion text row schema
  */
 export interface OpinionTextRow {
-    id: number;
-    docket: string;
-    case_name: string;
-    opinion_type: OpinionType;
-    term_year: number;
-    date: string;
-    justice: string;
-    text: string;
+  id: number;
+  docket: string;
+  case_name: string;
+  opinion_type: OpinionType;
+  term_year: number;
+  date: string;
+  justice: string;
+  text: string;
 }
 
 /**
  * Opinion filter schema
  */
 export interface OpinionFilter {
-    opinionType?: OpinionType;
-    termYear?: number;
-    docket?: string;
+  opinionType?: OpinionType;
+  termYear?: number;
+  docket?: string;
 }
 
 /**
@@ -85,21 +85,22 @@ export interface OpinionFilter {
  * @returns A Kysely database connection
  */
 export function openDb(dbPath: string): Kysely<AppDatabase> {
-    console.debug("Opening database connection to:", dbPath);
+  console.debug("Opening database connection to:", dbPath);
 
-    const isInMemoryDb = dbPath === ":memory:" || dbPath.startsWith("file::memory:");
-    if (!isInMemoryDb && !fs.existsSync(dbPath)) {
-        console.debug("Database file does not exist. Creating:", dbPath);
-        fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-        fs.writeFileSync(dbPath, "");
-    }
+  const isInMemoryDb =
+    dbPath === ":memory:" || dbPath.startsWith("file::memory:");
+  if (!isInMemoryDb && !fs.existsSync(dbPath)) {
+    console.debug("Database file does not exist. Creating:", dbPath);
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    fs.writeFileSync(dbPath, "");
+  }
 
-    const sqlite = new BetterSqlite3(dbPath);
-    sqlite.exec(DDL);
+  const sqlite = new BetterSqlite3(dbPath);
+  sqlite.exec(DDL);
 
-    return new Kysely<AppDatabase>({
-        dialect: new SqliteDialect({ database: sqlite }),
-    });
+  return new Kysely<AppDatabase>({
+    dialect: new SqliteDialect({ database: sqlite }),
+  });
 }
 
 /**
@@ -112,33 +113,33 @@ export function openDb(dbPath: string): Kysely<AppDatabase> {
  * @returns Rows with opinion metadata and full text
  */
 export async function queryOpinions(
-    db: Kysely<AppDatabase>,
-    filter: OpinionFilter = {},
+  db: Kysely<AppDatabase>,
+  filter: OpinionFilter = {},
 ): Promise<OpinionTextRow[]> {
-    let query = db
-        .selectFrom("opinions")
-        .select([
-            "id",
-            "docket",
-            "case_name",
-            "opinion_type",
-            "term_year",
-            "date",
-            "justice",
-            "text",
-        ]);
+  let query = db
+    .selectFrom("opinions")
+    .select([
+      "id",
+      "docket",
+      "case_name",
+      "opinion_type",
+      "term_year",
+      "date",
+      "justice",
+      "text",
+    ]);
 
-    if (filter.opinionType !== undefined) {
-        query = query.where("opinion_type", "=", filter.opinionType);
-    }
+  if (filter.opinionType !== undefined) {
+    query = query.where("opinion_type", "=", filter.opinionType);
+  }
 
-    if (filter.termYear !== undefined) {
-        query = query.where("term_year", "=", filter.termYear);
-    }
+  if (filter.termYear !== undefined) {
+    query = query.where("term_year", "=", filter.termYear);
+  }
 
-    if (filter.docket !== undefined) {
-        query = query.where("docket", "=", filter.docket);
-    }
+  if (filter.docket !== undefined) {
+    query = query.where("docket", "=", filter.docket);
+  }
 
-    return query.orderBy("date", "desc").execute() as Promise<OpinionTextRow[]>;
+  return query.orderBy("date", "desc").execute() as Promise<OpinionTextRow[]>;
 }

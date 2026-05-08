@@ -5,15 +5,15 @@
 export type OpinionType = "merits" | "orders";
 
 export type OpinionMetaData = {
-    opinionNumber?: number;
-    opinionType: OpinionType;
-    termYear: number;
-    date: string;
-    docket: string;
-    caseName: string;
-    justice: string;
-    citation: string;
-    pdfUrl: string;
+  opinionNumber?: number;
+  opinionType: OpinionType;
+  termYear: number;
+  date: string;
+  docket: string;
+  caseName: string;
+  justice: string;
+  citation: string;
+  pdfUrl: string;
 };
 
 /**
@@ -25,7 +25,9 @@ export type OpinionMetaData = {
  * @returns The filename, e.g. "0042-21-1234.json" or "24A123.json"
  */
 export function buildFilename(meta: OpinionMetaData): string {
-    const prefix =
-        meta.opinionNumber != null ? `${String(meta.opinionNumber).padStart(4, "0")}-` : "";
-    return `${prefix}${meta.docket.replace(/\//g, "-")}.json`;
+  const prefix =
+    meta.opinionNumber != null
+      ? `${String(meta.opinionNumber).padStart(4, "0")}-`
+      : "";
+  return `${prefix}${meta.docket.replace(/\//g, "-")}.json`;
 }
