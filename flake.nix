@@ -1,7 +1,7 @@
 {
-	description = "scotus-opinion-helper development shell (Node.js and npm)";
+	description = "scotus-opinion-helper development shell";
 
-	inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+	inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 
 	outputs = { nixpkgs, ... }:
 		let
@@ -22,6 +22,7 @@
 					default = pkgs.mkShell {
 						packages = with pkgs; [
 							nodejs
+							docker
 							sqlitebrowser
 						];
 					};
