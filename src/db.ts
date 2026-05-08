@@ -1,7 +1,7 @@
 /**
  * SCOTUS Opinion Helper
  *
- * Database schema for storing SCOTUS opinions and their chunks.
+ * Database schema for storing SCOTUS opinions (full text in SQLite).
  */
 
 import BetterSqlite3 from "better-sqlite3";
@@ -29,27 +29,10 @@ export interface OpinionsTable {
 }
 
 /**
- * Opinion chunks table schema
- */
-export interface OpinionChunksTable {
-    id: string;
-    opinion_id: number;
-    docket: string;
-    chunk_index: number;
-    total_chunks: number;
-    content: string;
-    embedding: string;
-    start_char: number;
-    end_char: number;
-    created_at: ColumnType<string, string | undefined, never>;
-}
-
-/**
  * App database schema
  */
 export interface AppDatabase {
     opinions: OpinionsTable;
-    opinion_chunks: OpinionChunksTable;
 }
 
 /**
@@ -69,19 +52,6 @@ const DDL = `
     pdf_url        TEXT    NOT NULL,
     text           TEXT    NOT NULL,
     created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS opinion_chunks (
-    id           TEXT    PRIMARY KEY,
-    opinion_id   INTEGER NOT NULL REFERENCES opinions(id),
-    docket       TEXT    NOT NULL,
-    chunk_index  INTEGER NOT NULL,
-    total_chunks INTEGER NOT NULL,
-    content      TEXT    NOT NULL,
-    embedding    TEXT    NOT NULL,
-    start_char   INTEGER NOT NULL,
-    end_char     INTEGER NOT NULL,
-    created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
   );
 `;
 
@@ -111,13 +81,14 @@ export interface OpinionFilter {
 /**
  * Open the database connection
  *
- * @param dbPath - The path to the database file
+ * @param dbPath - Path to the database file, or `:memory:` for an in-memory DB (no file on disk)
  * @returns A Kysely database connection
  */
 export function openDb(dbPath: string): Kysely<AppDatabase> {
     console.debug("Opening database connection to:", dbPath);
 
-    if (!fs.existsSync(dbPath)) {
+    const isInMemoryDb = dbPath === ":memory:" || dbPath.startsWith("file::memory:");
+    if (!isInMemoryDb && !fs.existsSync(dbPath)) {
         console.debug("Database file does not exist. Creating:", dbPath);
         fs.mkdirSync(path.dirname(dbPath), { recursive: true });
         fs.writeFileSync(dbPath, "");

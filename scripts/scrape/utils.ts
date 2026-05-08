@@ -4,22 +4,7 @@ import * as path from "path";
 import { OPINIONS_DIR, BASE_URL } from "../../src/constants";
 import { buildFilename, type OpinionMetaData } from "../../src/libs/opinionUtils";
 
-export const ANSI = {
-    cyan: "\x1b[36m",
-    yellow: "\x1b[33m",
-    reset: "\x1b[0m",
-} as const;
-
 export type OpinionType = OpinionMetaData["opinionType"];
-
-export const TYPE_COLOR: Record<OpinionType, string> = {
-    merits: ANSI.cyan,
-    orders: ANSI.yellow,
-};
-
-export function colorLabel(type: OpinionType): string {
-    return `${TYPE_COLOR[type]}[${type}]${ANSI.reset}`;
-}
 
 export function buildPdfUrl(relativeUrl: string): string {
     return relativeUrl.startsWith("http")

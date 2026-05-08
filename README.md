@@ -1,12 +1,12 @@
 # scotus-opinion-helper
 
-Scrapes US Supreme Court slip opinions from two listing pages (merits, orders), extracts full text from PDFs, generates embeddings, and loads everything into a local Weaviate vector store for semantic search.
+Scrapes US Supreme Court slip opinions from two listing pages (merits, orders), extracts full text from PDFs, and stores rows in SQLite. Chunking, OpenAI embeddings, and Weaviate upload happen in a separate step.
 
 ## How it works
 
-1. `npm run scrape-opinions` — fetches the listing pages, downloads each PDF, extracts text, chunks it, generates OpenAI embeddings, and writes everything to SQLite (`data/opinions.db`). Metadata-only JSON backups are written to `data/opinions/{opinionType}/{year}/`.
+1. `npm run scrape-opinions` — fetches the listing pages, downloads each PDF, extracts text, and writes opinion rows to SQLite (`data/opinions.db`). Metadata-only JSON backups are written to `data/opinions/{opinionType}/{termYear}/`.
 
-2. `npm run upload-opinions` — reads pre-computed chunks and vectors from SQLite and upserts them into Weaviate. No re-embedding.
+2. `npm run upload-opinions` — reads every opinion from SQLite, chunks text in memory, calls OpenAI to embed chunks, and upserts vectors into Weaviate. Chunks are not persisted in SQLite. The collection must define a self-provided named vector `default` (the script creates this automatically). If you previously created an empty `SupremeCourtOpinions` collection without vectors, delete it (or wipe the Weaviate Docker volume) before uploading again.
 
 ## Setup
 
@@ -22,7 +22,7 @@ Install dependencies
 npm i
 ```
 
-Set up environment variables in `.env`
+Set up environment variables in `.env` (`OPENAI_API_KEY` is needed for upload only):
 
 ```shell
 OPENAI_API_KEY=your-openai-api-key

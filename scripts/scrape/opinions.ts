@@ -1,48 +1,25 @@
 /**
  * SCOTUS OPINION SCRAPER
  *
- * Fetches slip opinions from all three SCOTUS listing pages, downloads
- * each PDF, extracts the full text, chunks it, generates OpenAI embeddings,
- * and persists everything to SQLite. Lightweight JSON metadata backups are
- * also written to data/opinions/{opinionType}/{termYear}/
+ * Fetches slip opinions from the SCOTUS listing pages, downloads each PDF,
+ * extracts full text, and persists opinions to SQLite. Lightweight JSON
+ * metadata backups are written to data/opinions/{opinionType}/{termYear}/.
+ * Chunking and embeddings run in upload-opinions.
  *
  * Usage:
  *   npm run scrape-opinions                  # defaults to current year
  *   npm run scrape-opinions -- --term 24     # scrape October Term 2024
- *
- * Requires: OPENAI_API_KEY in .env
  */
 
 import axios from "axios";
 import { PDFParse } from "pdf-parse";
-import OpenAI from "openai";
-import dotenv from "dotenv";
 
-import { chunkText } from "../../src/libs/chunking";
-import {
-    BASE_URL,
-    CHUNK_OVERLAP,
-    CHUNK_SIZE,
-    DELAY_MS,
-    EMBEDDING_DIMENSIONS,
-    EMBEDDING_MODEL,
-    DB_PATH,
-} from "../../src/constants";
+import { BASE_URL, DELAY_MS, DB_PATH } from "../../src/constants";
 import { openDb } from "../../src/db";
 import { type OpinionMetaData } from "../../src/libs/opinionUtils";
-import { colorLabel, delay, saveJsonBackup } from "./utils";
+import { delay, saveJsonBackup } from "./utils";
 import { parseMeritsListingPage } from "./merits";
 import { parseOrdersListingPage } from "./orders";
-
-dotenv.config();
-
-const REQUIRED_ENV = ["OPENAI_API_KEY"];
-
-const missing = REQUIRED_ENV.filter((v) => !process.env[v]);
-if (missing.length > 0) {
-    console.error("Missing required environment variables:", missing);
-    process.exit(1);
-}
 
 const termArg = process.argv.indexOf("--term");
 const TERM_YEAR: number = (() => {
@@ -64,7 +41,6 @@ const SOURCES: { type: OpinionMetaData["opinionType"]; path: string }[] = [
 
 async function scrapeOpinions(): Promise<void> {
     const db = openDb(DB_PATH);
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     try {
         for (const source of SOURCES) {
@@ -90,7 +66,7 @@ async function scrapeOpinions(): Promise<void> {
             console.log(`  Found ${opinions.length} ${source.type} opinions`);
 
             for (const meta of opinions) {
-                const msg = `  ${colorLabel(meta.opinionType)} ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
+                const msg = `  [${meta.opinionType}] ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
                 console.log(msg);
 
                 let pdfBuffer: Buffer;
@@ -154,69 +130,6 @@ async function scrapeOpinions(): Promise<void> {
                     );
                 }
 
-                const opinionRow = await db
-                    .selectFrom("opinions")
-                    .select("id")
-                    .where("docket", "=", meta.docket)
-                    .executeTakeFirst();
-
-                if (!opinionRow) {
-                    console.warn(`    Could not retrieve opinion id for ${meta.docket}`);
-                    await delay(DELAY_MS);
-                    continue;
-                }
-
-                const sourceKey = `opinion:${meta.docket}`;
-                const chunks = chunkText(text, CHUNK_SIZE, CHUNK_OVERLAP, sourceKey);
-
-                let embeddingRes: Awaited<ReturnType<typeof openai.embeddings.create>>;
-                try {
-                    embeddingRes = await openai.embeddings.create({
-                        model: EMBEDDING_MODEL,
-                        dimensions: EMBEDDING_DIMENSIONS,
-                        input: chunks.map((c) => c.content),
-                    });
-                } catch (err) {
-                    console.warn(
-                        `    Skipping embedding error for ${meta.docket}:`,
-                        (err as Error).message,
-                    );
-                    await delay(DELAY_MS);
-                    continue;
-                }
-
-                let chunkErrors = 0;
-                for (let i = 0; i < chunks.length; i++) {
-                    const chunk = chunks[i];
-                    const vector = embeddingRes.data[i].embedding;
-
-                    try {
-                        await db
-                            .insertInto("opinion_chunks")
-                            .values({
-                                id: `opinion:${meta.docket}:chunk:${i}`,
-                                opinion_id: opinionRow.id,
-                                docket: meta.docket,
-                                chunk_index: chunk.metadata.chunkIndex,
-                                total_chunks: chunk.metadata.totalChunks,
-                                content: chunk.content,
-                                embedding: JSON.stringify(vector),
-                                start_char: chunk.metadata.startChar,
-                                end_char: chunk.metadata.endChar,
-                            })
-                            .onConflict((oc) => oc.doNothing())
-                            .execute();
-                    } catch (err) {
-                        chunkErrors++;
-                        console.warn(
-                            `    Chunk ${i} insert error for ${meta.docket}:`,
-                            (err as Error).message,
-                        );
-                    }
-                }
-
-                const stored = chunks.length - chunkErrors;
-                console.log(`    Stored ${stored}/${chunks.length} chunks`);
                 await delay(DELAY_MS);
             }
         }
