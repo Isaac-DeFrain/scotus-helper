@@ -6,6 +6,7 @@ data/opinions/
 
 # env
 .env
+.direnv
 
 # misc
 .DS_Store

@@ -10,6 +10,12 @@ Scrapes US Supreme Court slip opinions from two listing pages (merits, orders), 
 
 ## Setup
 
+With [Nix](https://nixos.org/), enter a shell that includes Node.js and npm (see `flake.nix`):
+
+```shell
+nix develop
+```
+
 Install dependencies
 
 ```shell
