@@ -40,6 +40,7 @@ docker compose up -d
 npm run scrape-opinions                 # scrape current term
 npm run scrape-opinions -- --term 24    # scrape October Term 2024
 npm run upload-opinions                 # push vectors to Weaviate
+npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
 ```
 
 ## Test
