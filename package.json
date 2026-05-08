@@ -4,12 +4,14 @@
 	"type": "module",
 	"private": true,
 	"scripts": {
+		"check": "npx tsc",
 		"lint": "eslint .",
 		"test": "jest",
 		"test:db": "jest src/db.test.ts",
 		"test:utils": "jest src/libs/opinionUtils.test.ts",
 		"scrape-opinions": "tsx scripts/scrape/opinions.ts",
-		"upload-opinions": "tsx scripts/uploadOpinions.ts"
+		"upload-opinions": "tsx scripts/uploadOpinions.ts",
+		"inspect-weaviate": "tsx scripts/inspectWeaviate.ts"
 	},
 	"dependencies": {
 		"axios": "^1.16.0",
@@ -19,7 +21,8 @@
 		"kysely": "^0.28.17",
 		"openai": "^6.36.0",
 		"pdf-parse": "^2.4.5",
-		"weaviate-client": "^3.13.0"
+		"weaviate-client": "^3.13.0",
+		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

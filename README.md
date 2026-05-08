@@ -26,7 +26,6 @@ Set up environment variables in `.env` (`OPENAI_API_KEY` is needed for upload on
 
 ```shell
 OPENAI_API_KEY=your-openai-api-key
-WEAVIATE_URL=http://localhost:8080
 ```
 
 Make sure the docker daemon is running and then start Weaviate
