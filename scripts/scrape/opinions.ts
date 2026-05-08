@@ -40,11 +40,12 @@ function normalizeTermYear(termYear: number): number {
 function getRequestedTerms(argv: string[]): number[] {
   const all = argv.includes("--all");
   const termArg = argv.indexOf("--term");
-
   const currentTerm = getCurrentTermYear();
+
   if (all) {
     const start = normalizeTermYear(currentTerm);
     const terms: number[] = [];
+
     for (let t = start; t >= 18; t -= 1) terms.push(t);
     return terms;
   }

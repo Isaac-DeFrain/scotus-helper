@@ -6,14 +6,14 @@
  */
 
 import dotenv from "dotenv";
-import weaviate from "weaviate-client";
 
 import { WEAVIATE_COLLECTION_NAME } from "../src/constants";
+import { connectWeaviate } from "../src/libs/weaviateClient";
 
 dotenv.config();
 
 async function inspectWeaviate(): Promise<void> {
-  const client = await weaviate.connectToLocal();
+  const client = await connectWeaviate();
 
   if (!client) {
     console.error("Could not connect to Weaviate.");

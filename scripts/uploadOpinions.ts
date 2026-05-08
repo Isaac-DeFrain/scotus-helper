@@ -20,6 +20,7 @@ import { z } from "zod";
 
 import { openDb, type AppDatabase } from "../src/db";
 import { chunkText } from "../src/libs/chunking";
+import { connectWeaviate } from "../src/libs/weaviateClient";
 import {
   BATCH_SIZE,
   CHUNK_OVERLAP,
@@ -140,7 +141,7 @@ async function uploadOpinions(): Promise<void> {
 
   let client: Awaited<ReturnType<typeof weaviate.connectToLocal>>;
   try {
-    client = await weaviate.connectToLocal();
+    client = await connectWeaviate();
   } catch (err) {
     console.error("Could not connect to Weaviate:", (err as Error).message);
     console.error("Run `docker compose up -d` to start Weaviate.");
