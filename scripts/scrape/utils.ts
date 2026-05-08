@@ -24,11 +24,11 @@ export function delay(ms: number): Promise<void> {
  * {OPINIONS_DIR}/{opinionType}/{termYear}/
  */
 export function saveJsonBackup(meta: OpinionMetaData): void {
-  const date = new Date(meta.date);
+  const termYear = new Date(meta.termYear);
   const typeDir = path.join(
     OPINIONS_DIR,
     meta.opinionType,
-    date.getFullYear().toString(),
+    termYear.getFullYear().toString(),
   );
 
   fs.mkdirSync(typeDir, { recursive: true });
