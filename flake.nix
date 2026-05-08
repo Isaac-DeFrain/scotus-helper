@@ -22,6 +22,10 @@
 					default = pkgs.mkShell {
 						packages = with pkgs; [
 							nodejs
+							python3
+							gnumake
+							gcc
+							pkg-config
 							docker
 							sqlitebrowser
 						];

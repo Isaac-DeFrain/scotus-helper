@@ -8,6 +8,8 @@ Scrapes US Supreme Court slip opinions from two listing pages (merits, orders), 
 
 2. `npm run upload-opinions` — reads every opinion from SQLite, chunks text in memory, calls OpenAI to embed chunks, and upserts vectors into Weaviate. Chunks are not persisted in SQLite. The collection must define a self-provided named vector `default` (the script creates this automatically). If you previously created an empty `SupremeCourtOpinions` collection without vectors, delete it (or wipe the Weaviate Docker volume) before uploading again.
 
+3. `npm run inspect-weaviate` — prints Weaviate health (live/ready/version), lists collections, checks whether `SupremeCourtOpinions` exists, and if so prints its object count plus a sample object's UUID and properties.
+
 ## Setup
 
 With [Nix](https://nixos.org/), enter a shell that includes Node.js and npm (see `flake.nix`):
@@ -41,6 +43,22 @@ npm run scrape-opinions                 # scrape current term
 npm run scrape-opinions -- --term 24    # scrape October Term 2024
 npm run upload-opinions                 # push vectors to Weaviate
 npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
+```
+
+### Dockerized scripts
+
+The repo includes a `Dockerfile` so you can run the scripts in a container while keeping Weaviate in Docker.
+
+Start Weaviate:
+
+```shell
+docker compose up -d weaviate
+```
+
+Run a script:
+
+```shell
+docker compose run --rm app npm run <SCRIPT>
 ```
 
 ## Test

@@ -18,5 +18,29 @@ services:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint:
+      - nix
+      - develop
+      - -c
+    command:
+      - npm
+      - run
+      - scrape-opinions
+      - --
+      - --all
+    depends_on:
+      - weaviate
+    env_file:
+      - .env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+    volumes:
+      - ./data:/app/data
+
 volumes:
   weaviate_data:
