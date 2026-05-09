@@ -18,4 +18,13 @@ export const BATCH_SIZE = 100;
 // SQLite default SQLITE_LIMIT_VARIABLE_NUMBER is 999; each chunk row has 13
 // columns, so cap bulk inserts at 76 rows (76 * 13 = 988 < 999).
 export const SQLITE_INSERT_BATCH_SIZE = 76;
+
+// OpenAI embeddings API hard limits per request
+export const MAX_EMBEDDING_INPUTS = 2048;
+export const MAX_EMBEDDING_TOKENS = 250_000; // actual limit is 300k; conservative buffer
+// Conservative chars-per-token estimate; legal/citation-heavy text can be
+// denser than general English (~4), so we use 3 to avoid exceeding the
+// 300k-token-per-request limit.
+export const CHARS_PER_TOKEN = 3;
+
 export const WEAVIATE_COLLECTION_NAME = "SupremeCourtOpinions";

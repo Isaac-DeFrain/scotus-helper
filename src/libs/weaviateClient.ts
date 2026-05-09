@@ -4,7 +4,7 @@
  * This file contains the functions to connect to the Weaviate instance.
  */
 
-import weaviate from "weaviate-client";
+import weaviate, { WeaviateClient } from "weaviate-client";
 
 /**
  * Parse the Weaviate URL
@@ -84,4 +84,17 @@ export async function connectWeaviate(): Promise<
   }
 
   throw new Error("Unreachable");
+}
+
+/**
+ * Connects to Weaviate client, exiting the process with an error message on failure.
+ */
+export async function connectWeaviateOrExit(): Promise<WeaviateClient> {
+  try {
+    return await connectWeaviate();
+  } catch (err) {
+    console.error("Could not connect to Weaviate:", (err as Error).message);
+    console.error("Run `docker compose up -d` to start Weaviate.");
+    process.exit(1);
+  }
 }

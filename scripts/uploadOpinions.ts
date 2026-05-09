@@ -13,23 +13,26 @@
  */
 
 import * as fs from "fs";
-import weaviate, { vectors } from "weaviate-client";
-import OpenAI from "openai";
+import { Collection, vectors, type WeaviateClient } from "weaviate-client";
+import OpenAI, { APIError } from "openai";
 import dotenv from "dotenv";
 import { Kysely } from "kysely";
 import { z } from "zod";
 
 import { openDb, type AppDatabase } from "../src/db";
-import { chunkText } from "../src/libs/chunking";
-import { connectWeaviate } from "../src/libs/weaviateClient";
+import { Chunk, chunkText } from "../src/libs/chunking";
+import { connectWeaviateOrExit } from "../src/libs/weaviateClient";
 import {
   BATCH_SIZE,
+  CHARS_PER_TOKEN,
   CHUNK_OVERLAP,
   CHUNK_SIZE,
   DB_PATH,
   DELAY_MS,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
+  MAX_EMBEDDING_INPUTS,
+  MAX_EMBEDDING_TOKENS,
   SQLITE_INSERT_BATCH_SIZE,
   WEAVIATE_COLLECTION_NAME,
 } from "../src/constants";
@@ -62,6 +65,37 @@ const weaviateChunkRowSchema = z.object({
 });
 
 type WeaviateChunkRow = z.infer<typeof weaviateChunkRowSchema>;
+
+const RETRY_AFTER_PATTERN = /try again in ([\d.]+)s/i;
+const RETRY_BUFFER_MS = 500;
+
+/**
+ * Calls `openai.embeddings.create` and automatically retries once on a 429
+ * rate-limit response, waiting the duration suggested in the error message
+ * (plus a small buffer) before retrying.
+ */
+async function createEmbeddingWithRetry(
+  openai: OpenAI,
+  params: Parameters<typeof openai.embeddings.create>[0],
+): Promise<ReturnType<typeof openai.embeddings.create>> {
+  try {
+    return await openai.embeddings.create(params);
+  } catch (err) {
+    if (err instanceof APIError && err.status === 429) {
+      const match = RETRY_AFTER_PATTERN.exec(err.message);
+      const waitMs = match
+        ? Math.ceil(parseFloat(match[1]) * 1000) + RETRY_BUFFER_MS
+        : 3_000;
+
+      console.warn(`    Rate limited — waiting ${waitMs} ms before retry...`);
+
+      await delay(waitMs);
+      return openai.embeddings.create(params);
+    }
+
+    throw err;
+  }
+}
 
 /**
  * For each opinion, check whether chunks are already cached in `opinion_chunks`.
@@ -105,18 +139,56 @@ async function ensureChunksEmbedded(
       continue;
     }
 
-    let embeddingRes: Awaited<ReturnType<typeof openai.embeddings.create>>;
-    try {
-      embeddingRes = await openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        dimensions: EMBEDDING_DIMENSIONS,
-        input: chunks.map((c) => c.content),
-      });
-    } catch (err) {
-      console.warn(
-        `    Skipping embedding error for ${row.docket}:`,
-        (err as Error).message,
-      );
+    // Split into sub-batches respecting both the input-count and token-count limits.
+    const subBatches: Chunk[][] = [];
+    let current: Chunk[] = [];
+    let currentTokens = 0;
+
+    for (const chunk of chunks) {
+      const estimated = Math.ceil(chunk.content.length / CHARS_PER_TOKEN);
+      const wouldExceedInputs = current.length >= MAX_EMBEDDING_INPUTS;
+      const wouldExceedTokens =
+        currentTokens + estimated > MAX_EMBEDDING_TOKENS;
+
+      if (current.length > 0 && (wouldExceedInputs || wouldExceedTokens)) {
+        subBatches.push(current);
+        current = [];
+        currentTokens = 0;
+      }
+
+      current.push(chunk);
+      currentTokens += estimated;
+    }
+
+    if (current.length > 0) subBatches.push(current);
+
+    const allEmbeddings: number[][] = [];
+    let embeddingFailed = false;
+
+    // Embed each sub-batch in turn.
+    for (const batch of subBatches) {
+      try {
+        const embeddingRes = await createEmbeddingWithRetry(openai, {
+          model: EMBEDDING_MODEL,
+          dimensions: EMBEDDING_DIMENSIONS,
+          input: batch.map((c) => c.content),
+        });
+
+        allEmbeddings.push(...embeddingRes.data.map((d) => d.embedding));
+      } catch (err) {
+        console.warn(
+          `    Skipping embedding error for ${row.docket}:`,
+          (err as Error).message,
+        );
+
+        embeddingFailed = true;
+        break;
+      }
+
+      await delay(DELAY_MS);
+    }
+
+    if (embeddingFailed) {
       await delay(DELAY_MS);
       continue;
     }
@@ -126,7 +198,7 @@ async function ensureChunksEmbedded(
       chunk_index: chunk.metadata.chunkIndex,
       total_chunks: chunk.metadata.totalChunks,
       content: chunk.content,
-      embedding: JSON.stringify(embeddingRes.data[i].embedding),
+      embedding: JSON.stringify(allEmbeddings[i]),
       start_char: chunk.metadata.startChar,
       end_char: chunk.metadata.endChar,
       case_name: row.case_name,
@@ -183,70 +255,74 @@ async function* streamChunksFromDb(
   }
 }
 
-  let client: Awaited<ReturnType<typeof weaviate.connectToLocal>>;
+/**
+ * Ensures the Weaviate collection exists, creating it with self-provided
+ * vectors if it does not.
+ */
+async function ensureCollection(
+  client: WeaviateClient,
+): Promise<Collection<OpinionChunk>> {
+  let exists: boolean;
   try {
-    client = await connectWeaviate();
+    exists = await client.collections.exists(WEAVIATE_COLLECTION_NAME);
   } catch (err) {
-    console.error("Could not connect to Weaviate:", (err as Error).message);
-    console.error("Run `docker compose up -d` to start Weaviate.");
+    console.error(
+      "Could not check collection existence:",
+      (err as Error).message,
+    );
     process.exit(1);
   }
 
+  if (!exists) {
+    try {
+      await client.collections.create({
+        name: WEAVIATE_COLLECTION_NAME,
+        vectorizers: vectors.selfProvided(),
+      });
+
+      console.log(`Created collection: ${WEAVIATE_COLLECTION_NAME}`);
+    } catch (err) {
+      console.error("Could not create collection:", (err as Error).message);
+      process.exit(1);
+    }
+  }
+
+  return client.collections.get(WEAVIATE_COLLECTION_NAME);
+}
+
+/**
+ * Orchestrates the full upload pipeline:
+ *   1. Ensures the SQLite database exists.
+ *   2. Calls `ensureChunksEmbedded` to chunk and embed any opinions not yet cached.
+ *   3. Ensures the Weaviate collection exists.
+ *   4. Streams cached chunks from SQLite in pages and batch-inserts them into Weaviate.
+ */
+async function uploadOpinions(): Promise<void> {
+  if (!fs.existsSync(DB_PATH)) {
+    console.error(`Database not found: ${DB_PATH}`);
+    console.error("Run `npm run scrape-opinions` first.");
+    process.exit(1);
+  }
+
+  const client = await connectWeaviateOrExit();
   const db = openDb(DB_PATH);
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
     await ensureChunksEmbedded(db, openai);
-    const sortedRows = await loadChunksFromDb(db);
-
-    if (sortedRows.length === 0) {
-      console.log(
-        "No chunks to upload after embedding. Nothing to send to Weaviate.",
-      );
-      return;
-    }
-
-    console.log(`Uploading ${sortedRows.length} chunks to Weaviate...`);
 
     try {
-      // Create collection if it doesn't exist
-      let exists: boolean;
-      try {
-        exists = await client.collections.exists(WEAVIATE_COLLECTION_NAME);
-      } catch (err) {
-        console.error(
-          "Could not check collection existence:",
-          (err as Error).message,
-        );
-        process.exit(1);
-      }
+      const collection = await ensureCollection(client);
 
-      if (!exists) {
-        try {
-          await client.collections.create({
-            name: WEAVIATE_COLLECTION_NAME,
-            vectorizers: vectors.selfProvided(),
-          });
-
-          console.log(`Created collection: ${WEAVIATE_COLLECTION_NAME}`);
-        } catch (err) {
-          console.error("Could not create collection:", (err as Error).message);
-          process.exit(1);
-        }
-      }
-
-      const collection = client.collections.get(WEAVIATE_COLLECTION_NAME);
       let successCount = 0;
       let errorCount = 0;
+      let batchNum = 0;
 
-      for (let i = 0; i < sortedRows.length; i += BATCH_SIZE) {
-        const batch = sortedRows.slice(i, i + BATCH_SIZE);
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(sortedRows.length / BATCH_SIZE);
+      for await (const page of streamChunksFromDb(db, BATCH_SIZE)) {
+        batchNum += 1;
+        console.log(`  Batch ${batchNum} (${page.length} chunks)...`);
 
-        console.log(`  Batch ${batchNum}/${totalBatches}...`);
-
-        const objects = batch.map((row) => ({
+        const objects = page.map((row) => ({
           properties: {
             text: row.content,
             docket: row.docket,
@@ -263,16 +339,23 @@ async function* streamChunksFromDb(
 
         try {
           const batchResult = await collection.data.insertMany(objects);
-          successCount += batch.length;
+          successCount += page.length;
           console.debug(
             `  Results: ${JSON.stringify(batchResult.allResponses, null, 2)}`,
           );
         } catch (err) {
-          errorCount += batch.length;
+          errorCount += page.length;
           console.warn(`  Batch ${batchNum} failed:`, (err as Error).message);
         }
 
-        console.log(`  Uploaded ${successCount}/${sortedRows.length} chunks`);
+        console.log(`  Uploaded ${successCount} chunks so far...`);
+      }
+
+      if (successCount === 0 && errorCount === 0) {
+        console.log(
+          "No chunks to upload after embedding. Nothing to send to Weaviate.",
+        );
+        return;
       }
 
       console.log(
