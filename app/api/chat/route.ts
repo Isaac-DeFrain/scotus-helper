@@ -22,6 +22,7 @@ import { POST as guardrails } from "@/app/api/guardrails/route";
 import { guardrailsResponseSchema } from "@/src/libs/guardrails";
 
 const CHAT_MODEL = "gpt-4o-mini";
+const NEAR_VECTOR_LIMIT = 25;
 
 /**
  * A source returned alongside chat responses, linking to the original PDF.
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
       );
 
       const result = await collection.query.nearVector(queryVector, {
-        limit: 8,
+        limit: NEAR_VECTOR_LIMIT,
         returnProperties: [
           "text",
           "docket",
