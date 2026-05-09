@@ -16,12 +16,13 @@ export default function Home() {
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [messages]);
 
-	const handleChatSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+	const handleChatSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!input.trim() || isStreaming) return;
 
@@ -45,7 +46,8 @@ export default function Home() {
 			});
 
 			if (!response.ok) {
-				console.error("Error from chat API:", await response.text());
+				const { error } = await response.json();
+				console.error("Error from chat API:", error);
 				return;
 			}
 
@@ -78,6 +80,7 @@ export default function Home() {
 			console.error("Error in chat:", error);
 		} finally {
 			setIsStreaming(false);
+			inputRef.current?.focus();
 		}
 	};
 
@@ -135,11 +138,13 @@ export default function Home() {
 
 				<form onSubmit={handleChatSubmit} className={styles.form}>
 					<input
+						ref={inputRef}
 						value={input}
 						onChange={(e) => setInput(e.target.value)}
 						placeholder="Ask a question about SCOTUS opinions..."
 						className={styles.input}
 						disabled={isStreaming}
+						autoFocus
 					/>
 					<button
 						type="submit"
