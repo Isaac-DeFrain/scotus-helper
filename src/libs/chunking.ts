@@ -1,6 +1,6 @@
 /**
  * Chunking library for the SCOTUS Opinion Helper.
- * Defines the Chunk type and the chunkText function, which splits text into overlapping sentence-based chunks for embedding.
+ * Defines the `Chunk` type and the `chunkText` function, which splits text into overlapping sentence-based chunks for embedding.
  */
 
 export type Chunk = {
@@ -96,6 +96,7 @@ function getLastWords(text: string, maxLength: number): string {
   for (let i = words.length - 1; i >= 0; i--) {
     const word = words[i];
     const potential = word + (result ? " " + result : "");
+
     if (potential.length > maxLength) break;
     result = potential;
   }

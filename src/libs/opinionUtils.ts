@@ -17,6 +17,22 @@ export type OpinionMetaData = {
 };
 
 /**
+ * Shape of properties stored in Weaviate for each opinion chunk.
+ * All fields are required because the uploader always writes them.
+ */
+export type OpinionChunk = {
+  text: string;
+  docket?: string;
+  caseName?: string;
+  date?: string;
+  justice?: string;
+  opinionType?: string;
+  termYear?: number;
+  chunkIndex?: number;
+  totalChunks?: number;
+};
+
+/**
  * Build the backup JSON filename for an opinion.
  * Merits opinions are prefixed with their zero-padded number; all opinions
  * include the docket (slashes replaced with hyphens for filesystem safety).

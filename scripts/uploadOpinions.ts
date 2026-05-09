@@ -5,7 +5,7 @@
  * embeddings, and upserts chunk vectors into a local Weaviate instance.
  *
  * Usage:
- *   docker compose up -d        # start Weaviate
+ *   docker compose up -d weaviate  # start Weaviate
  *   npm run upload-opinions
  *
  * Requires: OPENAI_API_KEY, WEAVIATE_URL in .env (defaults to http://localhost:8080)

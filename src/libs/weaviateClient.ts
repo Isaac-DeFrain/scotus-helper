@@ -1,5 +1,17 @@
+/**
+ * Weaviate client
+ *
+ * This file contains the functions to connect to the Weaviate instance.
+ */
+
 import weaviate from "weaviate-client";
 
+/**
+ * Parse the Weaviate URL
+ *
+ * @param raw - The raw Weaviate URL
+ * @returns The parsed Weaviate URL
+ */
 function parseWeaviateUrl(raw: string): {
   httpHost: string;
   httpPort: number;
@@ -26,6 +38,11 @@ function parseWeaviateUrl(raw: string): {
   return { httpHost, httpPort, httpSecure, grpcHost, grpcPort, grpcSecure };
 }
 
+/**
+ * Connect to the Weaviate instance
+ *
+ * @returns The Weaviate client
+ */
 export async function connectWeaviate(): Promise<
   Awaited<ReturnType<typeof weaviate.connectToLocal>>
 > {

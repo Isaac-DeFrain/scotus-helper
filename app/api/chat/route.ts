@@ -1,40 +1,31 @@
+/**
+ * SCOTUS OPINION CHAT ENDPOINT
+ *
+ * This endpoint is used to chat with the SCOTUS opinion helper.
+ * It uses the OpenAI API to generate a response based on the query and the context.
+ * The context is the retrieved opinion chunks from Weaviate.
+ */
+
+import { wrapOpenAI } from "langsmith/wrappers/openai";
 import OpenAI from "openai";
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { NextResponse, NextRequest } from "next/server";
 
-import { WEAVIATE_COLLECTION_NAME } from "@/src/constants";
+import { EMBEDDING_MODEL, WEAVIATE_COLLECTION_NAME } from "@/src/constants";
 import { connectWeaviate } from "@/src/libs/weaviateClient";
+import { OpinionChunk } from "@/src/libs/opinionUtils";
+import {
+  POST as guardrails,
+  guardrailsResponseSchema,
+} from "@/app/api/guardrails/route";
 
-const requestSchema = z.object({
-  query: z.string().min(1),
-});
+const CHAT_MODEL = "gpt-4o-mini";
 
-type WeaviateObject<TProperties extends Record<string, unknown>> = {
-  properties: TProperties;
-};
-
-type NearVectorResult<TProperties extends Record<string, unknown>> = {
-  objects: Array<WeaviateObject<TProperties>>;
-};
-
-type OpinionChunk = {
-  text: string;
-  docket?: string;
-  caseName?: string;
-  date?: string;
-  justice?: string;
-  opinionType?: string;
-  termYear?: number;
-  chunkIndex?: number;
-  totalChunks?: number;
-};
-
-function hasNonEmptyText(
-  p: Record<string, unknown>,
-): p is Record<string, unknown> & { text: string } {
-  return typeof p.text === "string" && p.text.trim().length > 0;
-}
-
+/**
+ * Builds the context for the chat endpoint.
+ *
+ * @param chunks - The chunks to build the context from
+ * @returns The context
+ */
 function buildContext(chunks: OpinionChunk[]): string {
   return chunks
     .map((c, i) => {
@@ -58,52 +49,54 @@ ${c.text}
     .join("\n\n");
 }
 
-export async function POST(req: Request) {
+/**
+ * Chat endpoint
+ *
+ * @param req - The request object
+ * @returns The response object
+ */
+export async function POST(req: NextRequest) {
   try {
-    const { query } = requestSchema.parse(await req.json());
+    const guardrailsResponse = await guardrails(req);
+    const { normalizedQuery, isOnTopic } = guardrailsResponseSchema.parse(
+      await guardrailsResponse.json(),
+    );
 
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (!apiKey) {
+    if (!isOnTopic) {
       return NextResponse.json(
-        { error: "Missing OPENAI_API_KEY" },
-        { status: 500 },
+        {
+          error:
+            "Query is not on topic. Please ask a question about a U.S. Supreme Court opinion, ruling, case, or related legal topic.",
+        },
+        { status: 400 },
       );
     }
 
-    const openai = new OpenAI({ apiKey });
+    const apiKey = process.env.OPENAI_API_KEY!.trim();
+    const openai = wrapOpenAI(new OpenAI({ apiKey }));
     const client = await connectWeaviate();
 
     let chunks: OpinionChunk[] = [];
 
     try {
-      const embedding = await openai.embeddings.create({
-        model: "text-embedding-3-small",
-        input: query,
+      const queryEmbedding = await openai.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: normalizedQuery,
       });
 
-      const vector = embedding.data[0]?.embedding;
-      if (!vector) {
+      const queryVector = queryEmbedding.data[0]?.embedding;
+      if (!queryVector) {
         return NextResponse.json(
           { error: "Failed to embed query" },
           { status: 500 },
         );
       }
 
-      const collection = client.collections.get(
+      const collection = client.collections.get<OpinionChunk>(
         WEAVIATE_COLLECTION_NAME,
-      ) as unknown as {
-        query: {
-          nearVector: (
-            vector: number[],
-            options: {
-              limit: number;
-              returnProperties: string[];
-            },
-          ) => Promise<NearVectorResult<Record<string, unknown>>>;
-        };
-      };
+      );
 
-      const result = await collection.query.nearVector(vector, {
+      const result = await collection.query.nearVector(queryVector, {
         limit: 8,
         returnProperties: [
           "text",
@@ -118,25 +111,7 @@ export async function POST(req: Request) {
         ],
       });
 
-      const objects = result.objects;
-
-      chunks = objects
-        .map((o) => o.properties)
-        .filter(hasNonEmptyText)
-        .map((p) => ({
-          text: p.text,
-          docket: typeof p.docket === "string" ? p.docket : undefined,
-          caseName: typeof p.caseName === "string" ? p.caseName : undefined,
-          date: typeof p.date === "string" ? p.date : undefined,
-          justice: typeof p.justice === "string" ? p.justice : undefined,
-          opinionType:
-            typeof p.opinionType === "string" ? p.opinionType : undefined,
-          termYear: typeof p.termYear === "number" ? p.termYear : undefined,
-          chunkIndex:
-            typeof p.chunkIndex === "number" ? p.chunkIndex : undefined,
-          totalChunks:
-            typeof p.totalChunks === "number" ? p.totalChunks : undefined,
-        }));
+      chunks = result.objects.map((o) => o.properties).filter(hasNonEmptyText);
     } finally {
       await client.close();
     }
@@ -145,21 +120,21 @@ export async function POST(req: Request) {
     const encoder = new TextEncoder();
 
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: CHAT_MODEL,
       stream: true,
       temperature: 0.2,
       messages: [
         {
           role: "system",
-          content:
-            "You are a careful legal research assistant. Use only the provided sources when answering. If the sources are insufficient, say what is missing.",
+          content: `You are a careful legal research assistant with the goal of helping users find information about U.S. Supreme Court opinions.
+			Use ONLY the provided sources when answering. If the sources are insufficient, say what is missing.`,
         },
         {
           role: "user",
-          content: `Question: ${query}
+          content: `My question about the U.S. Supreme Court is: "${normalizedQuery}"
 
-Sources:
-${context}`,
+			Sources:
+			${context}`,
         },
       ],
     });
@@ -194,4 +169,8 @@ ${context}`,
       { status: 500 },
     );
   }
+}
+
+function hasNonEmptyText(p: OpinionChunk): boolean {
+  return p.text.trim().length > 0;
 }
