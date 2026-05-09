@@ -13,7 +13,10 @@ services:
       - 50051:50051
     volumes:
       - weaviate_data:/var/lib/weaviate
-    restart: on-failure:0
+    restart: unless-stopped
+    depends_on:
+      scrape:
+        condition: service_completed_successfully
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
@@ -25,20 +28,39 @@ services:
       retries: 10
       start_period: 10s
 
-  init:
+  scrape:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    entrypoint: ["npm", "run", "scrape-opinions", "--", "--all"]
+    restart: "no"
+
+  upload:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     depends_on:
       weaviate:
         condition: service_healthy
+      scrape:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
-      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+      WEAVIATE_URL: http://weaviate:8080
     volumes:
       - ./data:/app/data
-    entrypoint: ["/app/scripts/docker/run-init.sh"]
+    entrypoint: ["npm", "run", "upload-opinions"]
     restart: "no"
 
   app:
@@ -50,12 +72,12 @@ services:
     depends_on:
       weaviate:
         condition: service_healthy
-      init:
+      upload:
         condition: service_completed_successfully
     env_file:
       - .env
     environment:
-      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+      WEAVIATE_URL: http://weaviate:8080
     volumes:
       - ./data:/app/data
 
@@ -63,13 +85,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cron
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    user: root
     depends_on:
       weaviate:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+      WEAVIATE_URL: http://weaviate:8080
     volumes:
       - ./data:/app/data
     restart: unless-stopped
