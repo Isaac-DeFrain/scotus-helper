@@ -4,11 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import styles from "./page.module.css";
+import type { Source } from "@/app/api/chat/route";
 
 type ChatMessage = {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	sources?: Source[];
 };
 
 export default function Home() {
@@ -17,6 +19,10 @@ export default function Home() {
 	const [isStreaming, setIsStreaming] = useState(false);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		inputRef.current?.focus({ preventScroll: true });
+	}, []);
 
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,9 +58,12 @@ export default function Home() {
 			}
 
 			const assistantMessageId = uuidv4();
+			const rawSources = response.headers.get("X-Sources");
+			const sources: Source[] = rawSources ? JSON.parse(rawSources) : [];
+
 			setMessages((prev) => [
 				...prev,
-				{ id: assistantMessageId, role: "assistant", content: "" },
+				{ id: assistantMessageId, role: "assistant", content: "", sources },
 			]);
 
 			const reader = response.body?.getReader();
@@ -86,19 +95,18 @@ export default function Home() {
 
 	return (
 		<div className={styles.container}>
-			<h1 className={styles.title}>SCOTUS Opinion Helper</h1>
+			<h1 className={styles.title}>U.S. Supreme Court Helper</h1>
 
 			<div className={styles.panel}>
 				<h2 className={styles.panelTitle}>
-					Ask questions about uploaded opinions
+					Ask questions about U.S. Supreme Court opinions, rulings, cases, or related legal topics.
 				</h2>
 
 				<div className={styles.messages}>
 					{messages.length === 0 && (
 						<div className={styles.welcome}>
 							<p className={styles.welcomeText}>
-								Upload opinions to Weaviate, then ask questions
-								here.
+								Ask questions about uploaded U.S. Supreme Court opinions.
 							</p>
 						</div>
 					)}
@@ -113,13 +121,28 @@ export default function Home() {
 									: styles.assistant,
 							].join(" ")}
 						>
-							<p className={styles.messageHeader}>
-								{message.role === "user" ? "You" : "Assistant"}
-							</p>
-							<p className={styles.messageBody}>
-								{message.content}
-							</p>
-						</div>
+						<p className={styles.messageHeader}>
+							{message.role === "user" ? "You" : "SCOTUS Helper"}
+						</p>
+						<p className={styles.messageBody}>
+							{message.content}
+						</p>
+						{message.sources && message.sources.length > 0 && (
+							<div className={styles.sources}>
+								{message.sources.map((s) => (
+									<a
+										key={s.docket}
+										href={s.pdfUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+										className={styles.sourceLink}
+									>
+										{s.caseName}
+									</a>
+								))}
+							</div>
+						)}
+					</div>
 					))}
 
 					{isStreaming && !messages[messages.length - 1]?.content && (
@@ -143,8 +166,7 @@ export default function Home() {
 						onChange={(e) => setInput(e.target.value)}
 						placeholder="Ask a question about SCOTUS opinions..."
 						className={styles.input}
-						disabled={isStreaming}
-						autoFocus
+					disabled={isStreaming}
 					/>
 					<button
 						type="submit"

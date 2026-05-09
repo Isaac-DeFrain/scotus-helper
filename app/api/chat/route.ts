@@ -10,7 +10,12 @@ import { wrapOpenAI } from "langsmith/wrappers/openai";
 import OpenAI from "openai";
 import { NextResponse, NextRequest } from "next/server";
 
-import { EMBEDDING_MODEL, WEAVIATE_COLLECTION_NAME } from "@/src/constants";
+import {
+  DB_PATH,
+  EMBEDDING_MODEL,
+  WEAVIATE_COLLECTION_NAME,
+} from "@/src/constants";
+import { openDb } from "@/src/db";
 import { connectWeaviate } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
 import {
@@ -19,6 +24,15 @@ import {
 } from "@/app/api/guardrails/route";
 
 const CHAT_MODEL = "gpt-4o-mini";
+
+/**
+ * A source returned alongside chat responses, linking to the original PDF.
+ */
+export type Source = {
+  caseName: string;
+  docket: string;
+  pdfUrl: string;
+};
 
 /**
  * Builds the context for the chat endpoint.
@@ -66,7 +80,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Query is not on topic. Please ask a question about a U.S. Supreme Court opinion, ruling, case, or related legal topic.",
+            "Query is not on topic. Please ask a question about U.S. Supreme Court opinions, rulings, cases, justices, or related legal topics.",
         },
         { status: 400 },
       );
@@ -116,6 +130,30 @@ export async function POST(req: NextRequest) {
       await client.close();
     }
 
+    const dockets = [
+      ...new Set(chunks.map((c) => c.docket).filter(Boolean) as string[]),
+    ];
+
+    let sources: Source[] = [];
+
+    if (dockets.length > 0) {
+      const db = openDb(DB_PATH);
+      try {
+        const rows = await db
+          .selectFrom("opinions")
+          .select(["docket", "case_name", "pdf_url"])
+          .where("docket", "in", dockets)
+          .execute();
+        sources = rows.map((r) => ({
+          caseName: r.case_name,
+          docket: r.docket,
+          pdfUrl: r.pdf_url,
+        }));
+      } finally {
+        await db.destroy();
+      }
+    }
+
     const context = buildContext(chunks);
     const encoder = new TextEncoder();
 
@@ -159,6 +197,7 @@ export async function POST(req: NextRequest) {
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Cache-Control": "no-store",
+          "X-Sources": JSON.stringify(sources),
         },
       },
     );
