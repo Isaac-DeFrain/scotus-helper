@@ -18,11 +18,28 @@ services:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
+      test:
+        ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+    volumes:
+      - ./data:/app/data
+    entrypoint: ["/app/scripts/docker/run-init.sh"]
+    restart: "no"
 
   app:
     build:
@@ -33,6 +50,8 @@ services:
     depends_on:
       weaviate:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
