@@ -36,6 +36,7 @@ docker compose up -d weaviate
 
 ```shell
 npm run scrape-opinions                 # scrape current term
+npm run scrape-opinions -- --all        # scrape all terms: 2018-2025
 npm run scrape-opinions -- --term 24    # scrape October Term 2024
 npm run upload-opinions                 # push vectors to Weaviate
 npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
@@ -43,7 +44,7 @@ npm run inspect-weaviate                # print Weaviate health, collection coun
 
 ## Web UI
 
-After you've uploaded opinion chunks to Weaviate, you can run a small Next.js UI that streams answers from OpenAI using retrieved SCOTUS opinion excerpts as context.
+After you've scraped and uploaded opinion chunks to Weaviate, you can run a small Next.js UI that streams answers from OpenAI using retrieved SCOTUS opinion excerpts as context.
 
 Set environment variables in `.env` (see `.env.example`).
 
@@ -69,6 +70,23 @@ docker compose up --build
 ```
 
 The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
+
+### Automatic daily sync (cron)
+
+The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `docker compose up`.
+
+View its output:
+
+```shell
+docker compose logs -f cron
+```
+
+To change the schedule, edit the `RUN echo "0 8 * * * …"` line in `Dockerfile.cron` using standard cron syntax, then rebuild:
+
+```shell
+docker compose build cron
+docker compose up -d cron
+```
 
 ### Running scripts against the Dockerized stack
 

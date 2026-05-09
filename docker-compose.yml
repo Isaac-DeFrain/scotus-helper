@@ -40,5 +40,20 @@ services:
     volumes:
       - ./data:/app/data
 
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
 volumes:
   weaviate_data:
