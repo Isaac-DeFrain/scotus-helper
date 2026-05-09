@@ -28,7 +28,3 @@ export const MAX_EMBEDDING_TOKENS = 250_000; // actual limit is 300k; conservati
 export const CHARS_PER_TOKEN = 3;
 
 export const WEAVIATE_COLLECTION_NAME = "SupremeCourtOpinions";
-
-export const RERANK_MODEL = "rerank-v3.5";
-// Number of top chunks kept after reranking (passed to the LLM as context).
-export const RERANK_TOP_N = 10;

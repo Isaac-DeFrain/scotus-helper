@@ -22,11 +22,14 @@ import {
 import OpenAI, { APIError } from "openai";
 import dotenv from "dotenv";
 import { Kysely } from "kysely";
-import { z } from "zod";
 
 import { openDb, type AppDatabase, countChunks } from "../src/db";
 import { Chunk, chunkText } from "../src/libs/chunking";
-import { connectWeaviateOrExit } from "../src/libs/weaviateClient";
+import {
+  connectWeaviateOrExit,
+  weaviateChunkRowSchema,
+  type WeaviateChunkRow,
+} from "../src/libs/weaviateClient";
 import {
   BATCH_SIZE,
   CHARS_PER_TOKEN,
@@ -53,23 +56,6 @@ if (missing.length > 0) {
   console.error("Missing required environment variables:", missing);
   process.exit(1);
 }
-
-const weaviateChunkRowSchema = z.object({
-  docket: z.string(),
-  chunk_index: z.number().int().nonnegative(),
-  total_chunks: z.number().int().positive(),
-  content: z.string(),
-  embedding: z.array(z.number()).length(EMBEDDING_DIMENSIONS),
-  start_char: z.number().int().nonnegative(),
-  end_char: z.number().int().nonnegative(),
-  case_name: z.string(),
-  opinion_type: z.string(),
-  date: z.string(),
-  justice: z.string(),
-  term_year: z.number().int(),
-});
-
-type WeaviateChunkRow = z.infer<typeof weaviateChunkRowSchema>;
 
 const RETRY_AFTER_PATTERN = /try again in ([\d.]+)s/i;
 const RETRY_BUFFER_MS = 500;

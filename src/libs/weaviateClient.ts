@@ -5,6 +5,26 @@
  */
 
 import weaviate, { WeaviateClient } from "weaviate-client";
+import { z } from "zod";
+
+import { EMBEDDING_DIMENSIONS } from "../constants";
+
+export const weaviateChunkRowSchema = z.object({
+  docket: z.string(),
+  chunk_index: z.number().int().nonnegative(),
+  total_chunks: z.number().int().positive(),
+  content: z.string(),
+  embedding: z.array(z.number()).length(EMBEDDING_DIMENSIONS),
+  start_char: z.number().int().nonnegative(),
+  end_char: z.number().int().nonnegative(),
+  case_name: z.string(),
+  opinion_type: z.string(),
+  date: z.string(),
+  justice: z.string(),
+  term_year: z.number().int(),
+});
+
+export type WeaviateChunkRow = z.infer<typeof weaviateChunkRowSchema>;
 
 /**
  * Parse the Weaviate URL

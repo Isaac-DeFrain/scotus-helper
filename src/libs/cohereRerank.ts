@@ -7,8 +7,10 @@
 
 import { CohereClientV2 } from "cohere-ai";
 
-import { RERANK_MODEL, RERANK_TOP_N } from "@/src/constants";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
+
+const RERANK_MODEL = "rerank-v3.5";
+const RERANK_TOP_N = 10;
 
 /**
  * Reranks opinion chunks using Cohere's rerank API, returning the top-N most
