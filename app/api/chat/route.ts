@@ -132,8 +132,6 @@ export async function POST(req: NextRequest) {
       await client.close();
     }
 
-    chunks = await rerankChunks(normalizedQuery, chunks);
-
     const dockets = [
       ...new Set(chunks.map((c) => c.docket).filter(Boolean) as string[]),
     ];
@@ -148,6 +146,7 @@ export async function POST(req: NextRequest) {
           .select(["docket", "case_name", "pdf_url"])
           .where("docket", "in", dockets)
           .execute();
+
         sources = rows.map((r) => ({
           caseName: r.case_name,
           docket: r.docket,
