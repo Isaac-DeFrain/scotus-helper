@@ -101,6 +101,19 @@ async function scrapeOpinionsForTerm(
     console.log(`  Found ${opinions.length} ${source.type} opinions`);
 
     for (const meta of opinions) {
+      const existing = await db
+        .selectFrom("opinions")
+        .select("id")
+        .where("docket", "=", meta.docket)
+        .executeTakeFirst();
+
+      if (existing) {
+        console.log(
+          `  [skip] already in DB: ${meta.docket} — ${meta.caseName}`,
+        );
+        continue;
+      }
+
       const msg = `  [${meta.opinionType}] ${meta.opinionNumber ? `#${meta.opinionNumber}` : ""} ${meta.docket} — ${meta.caseName}`;
       console.log(msg);
 
