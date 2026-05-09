@@ -1,62 +1,44 @@
 # scotus-opinion-helper
 
-Scrapes US Supreme Court slip opinions from two listing pages (merits, orders), extracts full text from PDFs, and stores rows in SQLite. Chunking, OpenAI embeddings, and Weaviate upload happen in a separate step.
-
-## How it works
-
-1. `npm run scrape-opinions` — fetches the listing pages, downloads each PDF, extracts text, and writes opinion rows to SQLite (`data/opinions.db`). Metadata-only JSON backups are written to `data/opinions/{opinionType}/{termYear}/`.
-
-2. `npm run upload-opinions` — reads every opinion from SQLite, chunks text in memory, calls OpenAI to embed chunks, and upserts vectors into Weaviate. Chunks are not persisted in SQLite. The collection must define a self-provided named vector `default` (the script creates this automatically). If you previously created an empty `SupremeCourtOpinions` collection without vectors, delete it (or wipe the Weaviate Docker volume) before uploading again.
-
-3. `npm run inspect-weaviate` — prints Weaviate health (live/ready/version), lists collections, checks whether `SupremeCourtOpinions` exists, and if so prints its object count plus a sample object's UUID and properties.
+A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). On first launch it scrapes [merits](https://www.supremecourt.gov/opinions/slipopinion) and [orders](https://www.supremecourt.gov/opinions/relatingtoorders) listings, extracts full text from PDFs, chunks and embeds the content with OpenAI, and loads the vectors into [Weaviate](https://github.com/weaviate/weaviate) — then starts a Next.js chat UI backed by [`gpt-4o-mini`](https://developers.openai.com/api/docs/models/gpt-4o-mini) that lets you ask questions across all indexed opinions. A daily cron job keeps the corpus current.
 
 ## Setup
 
-With [Nix](https://nixos.org/), enter a shell that includes Node.js and npm (see `flake.nix`):
+Use [Docker](#docker) or follow these steps:
 
-```shell
-nix develop
-```
+1. Install dependencies
 
-Install dependencies
+    ```shell
+    npm i
+    ```
 
-```shell
-npm i
-```
+2. Set up environment variables in `.env` (see `.env.example`).
 
-Set up environment variables in `.env` (see `.env.example`).
+3. Scrape opinions
 
-Make sure the docker daemon is running and then start Weaviate
+    ```shell
+    npm run scrape-opinions -- --all
+    ```
 
-```shell
-docker compose up -d weaviate
-```
+4. Start Weaviate
 
-## Usage
+    ```shell
+    docker compose up -d weaviate
+    ```
 
-```shell
-npm run scrape-opinions                 # scrape current term
-npm run scrape-opinions -- --all        # scrape all terms: 2018-2025
-npm run scrape-opinions -- --term 24    # scrape October Term 2024
-npm run upload-opinions                 # push vectors to Weaviate
-npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
-```
+5. Upload opinions
 
-## Web UI
+    ```shell
+    npm run upload-opinions
+    ```
 
-After you've scraped and uploaded opinion chunks to Weaviate, you can run a small Next.js UI that streams answers from OpenAI using retrieved SCOTUS opinion excerpts as context.
+6. Run the chat app locally
 
-Set environment variables in `.env` (see `.env.example`).
+    ```shell
+    npm run dev
+    ```
 
-Run the app locally:
-
-```shell
-npm run dev
-```
-
-Or run the full stack with Docker (see [Docker](#docker) below).
-
-Then open `http://localhost:3000`.
+7. Then open `http://localhost:3000` and start asking questions!
 
 ## Docker
 
@@ -101,6 +83,20 @@ docker compose run --rm app npm run upload-opinions
 docker compose run --rm app npm run inspect-weaviate
 ```
 
+## Scripts
+
+1. `npm run scrape-opinions` — fetches the merits and orders listing pages, downloads each PDF, extracts full text, and upserts opinion rows into SQLite (`data/opinions.db`). Lightweight JSON metadata backups are written to `data/opinions/{opinionType}/{termYear}/`. Defaults to the current term.
+
+    | Flag | Behaviour |
+    | ---- | --------- |
+    | _(none)_ | current term only |
+    | `-- --all` | all terms from 2018 to present |
+    | `-- --term 24` | October Term 2024 only |
+
+2. `npm run upload-opinions` — for each opinion in SQLite, chunks the text and calls OpenAI (`text-embedding-3-small`) to generate embeddings, caching results in an `opinion_chunks` table so re-runs skip already-embedded opinions. Then batch-upserts all chunks as vectors into Weaviate (`SupremeCourtOpinions` collection, created automatically if absent).
+
+3. `npm run inspect-weaviate` — prints Weaviate health (live/ready/version), lists all collections, and for `SupremeCourtOpinions` shows the object count and a sample object.
+
 ## Test
 
 Run all tests
@@ -115,7 +111,7 @@ npm test
 - **Scraping**: axios + cheerio
 - **PDF extraction**: pdf-parse
 - **Database**: SQLite via better-sqlite3 + Kysely (type-safe query builder)
-- **Embeddings & chat**: OpenAI (`text-embedding-3-small`, `gpt-4o`)
+- **Embeddings & chat**: OpenAI (`text-embedding-3-small`, `gpt-4o-mini`)
 - **Vector store**: Weaviate (local, via Docker)
 - **Validation**: Zod
 - **Observability**: LangSmith (optional tracing)
