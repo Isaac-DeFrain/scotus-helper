@@ -1,8 +1,9 @@
 /**
  * SCOTUS OPINION UPLOADER
  *
- * Reads all opinions from SQLite, chunks text in memory, calls OpenAI for
- * embeddings, and upserts chunk vectors into a local Weaviate instance.
+ * Reads all opinions from SQLite, chunks and embeds any that are not yet
+ * cached in the `opinion_chunks` table, then uploads all chunks to Weaviate.
+ * The OpenAI embeddings API is called at most once per chunk across runs.
  *
  * Usage:
  *   docker compose up -d weaviate  # start Weaviate
@@ -60,22 +61,37 @@ const weaviateChunkRowSchema = z.object({
 
 type WeaviateChunkRow = z.infer<typeof weaviateChunkRowSchema>;
 
-async function chunkEmbedAllOpinions(
+/**
+ * For each opinion, check whether chunks are already cached in `opinion_chunks`.
+ * If not, chunk the text, call OpenAI once per opinion, and persist the results.
+ */
+async function ensureChunksEmbedded(
   db: Kysely<AppDatabase>,
   openai: OpenAI,
-): Promise<WeaviateChunkRow[]> {
+): Promise<void> {
   const opinions = await db.selectFrom("opinions").selectAll().execute();
-  const rows: WeaviateChunkRow[] = [];
 
   if (opinions.length === 0) {
     console.log("No opinions in SQLite.");
-    return rows;
+    return;
   }
 
-  console.log(`Chunking and embedding ${opinions.length} opinion(s)...`);
+  console.log(`Checking embeddings for ${opinions.length} opinion(s)...`);
 
   for (const row of opinions) {
-    console.log(`  [embed] ${row.docket} — ${row.case_name}`);
+    const cached = await db
+      .selectFrom("opinion_chunks")
+      .select("id")
+      .where("docket", "=", row.docket)
+      .limit(1)
+      .execute();
+
+    if (cached.length > 0) {
+      console.log(`  [cached] ${row.docket} — ${row.case_name}`);
+      continue;
+    }
+
+    console.log(`  [embed]  ${row.docket} — ${row.case_name}`);
     const sourceKey = `opinion:${row.docket}`;
     const chunks = chunkText(row.text, CHUNK_SIZE, CHUNK_OVERLAP, sourceKey);
 
@@ -103,33 +119,49 @@ async function chunkEmbedAllOpinions(
       continue;
     }
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      const embedding = embeddingRes.data[i].embedding;
+    const inserts = chunks.map((chunk, i) => ({
+      docket: row.docket,
+      chunk_index: chunk.metadata.chunkIndex,
+      total_chunks: chunk.metadata.totalChunks,
+      content: chunk.content,
+      embedding: JSON.stringify(embeddingRes.data[i].embedding),
+      start_char: chunk.metadata.startChar,
+      end_char: chunk.metadata.endChar,
+      case_name: row.case_name,
+      opinion_type: row.opinion_type,
+      date: row.date,
+      justice: row.justice,
+      term_year: row.term_year,
+      created_at: new Date().toISOString(),
+    }));
 
-      rows.push(
-        weaviateChunkRowSchema.parse({
-          docket: row.docket,
-          chunk_index: chunk.metadata.chunkIndex,
-          total_chunks: chunk.metadata.totalChunks,
-          content: chunk.content,
-          start_char: chunk.metadata.startChar,
-          end_char: chunk.metadata.endChar,
-          case_name: row.case_name,
-          opinion_type: row.opinion_type,
-          date: row.date,
-          justice: row.justice,
-          term_year: row.term_year,
-          embedding,
-        }),
-      );
-    }
+    await db.insertInto("opinion_chunks").values(inserts).execute();
 
-    console.log(`    Prepared ${chunks.length} chunks`);
+    console.log(`    Cached ${chunks.length} chunks`);
     await delay(DELAY_MS);
   }
+}
 
-  return rows;
+/**
+ * Load all cached chunks from SQLite and return them as WeaviateChunkRows,
+ * ready for upload.
+ */
+async function loadChunksFromDb(
+  db: Kysely<AppDatabase>,
+): Promise<WeaviateChunkRow[]> {
+  const cached = await db
+    .selectFrom("opinion_chunks")
+    .selectAll()
+    .orderBy("docket", "asc")
+    .orderBy("chunk_index", "asc")
+    .execute();
+
+  return cached.map((row) =>
+    weaviateChunkRowSchema.parse({
+      ...row,
+      embedding: JSON.parse(row.embedding),
+    }),
+  );
 }
 
 async function uploadOpinions(): Promise<void> {
@@ -152,12 +184,8 @@ async function uploadOpinions(): Promise<void> {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   try {
-    const rows = await chunkEmbedAllOpinions(db, openai);
-
-    const sortedRows = [...rows].sort((a, b) => {
-      const d = a.docket.localeCompare(b.docket);
-      return d !== 0 ? d : a.chunk_index - b.chunk_index;
-    });
+    await ensureChunksEmbedded(db, openai);
+    const sortedRows = await loadChunksFromDb(db);
 
     if (sortedRows.length === 0) {
       console.log(

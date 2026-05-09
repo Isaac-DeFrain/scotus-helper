@@ -29,10 +29,32 @@ export interface OpinionsTable {
 }
 
 /**
+ * Opinion chunks table schema — caches chunked text and embeddings so the
+ * OpenAI API is only called once per chunk across multiple upload runs.
+ */
+export interface OpinionChunksTable {
+  id: Generated<number>;
+  docket: string;
+  chunk_index: number;
+  total_chunks: number;
+  content: string;
+  embedding: string; // JSON-serialized number[]
+  start_char: number;
+  end_char: number;
+  case_name: string;
+  opinion_type: string;
+  date: string;
+  justice: string;
+  term_year: number;
+  created_at: ColumnType<string, string | undefined, never>;
+}
+
+/**
  * App database schema
  */
 export interface AppDatabase {
   opinions: OpinionsTable;
+  opinion_chunks: OpinionChunksTable;
 }
 
 /**
@@ -52,6 +74,24 @@ const DDL = `
     pdf_url        TEXT    NOT NULL,
     text           TEXT    NOT NULL,
     created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS opinion_chunks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    docket       TEXT    NOT NULL,
+    chunk_index  INTEGER NOT NULL,
+    total_chunks INTEGER NOT NULL,
+    content      TEXT    NOT NULL,
+    embedding    TEXT    NOT NULL,
+    start_char   INTEGER NOT NULL,
+    end_char     INTEGER NOT NULL,
+    case_name    TEXT    NOT NULL,
+    opinion_type TEXT    NOT NULL,
+    date         TEXT    NOT NULL,
+    justice      TEXT    NOT NULL,
+    term_year    INTEGER NOT NULL,
+    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (docket, chunk_index)
   );
 `;
 
