@@ -22,22 +22,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    entrypoint:
-      - nix
-      - develop
-      - -c
-    command:
-      - npm
-      - run
-      - scrape-opinions
-      - --
-      - --all
+    ports:
+      - 3000:3000
     depends_on:
       - weaviate
     env_file:
       - .env
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       WEAVIATE_URL: ${WEAVIATE_URL:-http://weaviate:8080}
     volumes:
       - ./data:/app/data

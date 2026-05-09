@@ -1,6 +1,9 @@
 node_modules
 npm-debug.log
 
+.next/
+*.tsbuildinfo
+
 .git
 .github
 
@@ -11,3 +14,6 @@ dist
 .cache
 
 .env
+
+flake.nix
+flake.lock

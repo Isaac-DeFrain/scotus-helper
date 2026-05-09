@@ -24,16 +24,12 @@ Install dependencies
 npm i
 ```
 
-Set up environment variables in `.env` (`OPENAI_API_KEY` is needed for upload only):
-
-```shell
-OPENAI_API_KEY=your-openai-api-key
-```
+Set up environment variables in `.env` (see `.env.example`).
 
 Make sure the docker daemon is running and then start Weaviate
 
 ```shell
-docker compose up -d
+docker compose up -d weaviate
 ```
 
 ## Usage
@@ -45,40 +41,46 @@ npm run upload-opinions                 # push vectors to Weaviate
 npm run inspect-weaviate                # print Weaviate health, collection counts, sample row
 ```
 
-## Web UI (chat)
+## Web UI
 
-After you’ve uploaded opinion chunks to Weaviate, you can run a small Next.js UI
-that streams answers from OpenAI using retrieved opinion excerpts as context.
+After you've uploaded opinion chunks to Weaviate, you can run a small Next.js UI that streams answers from OpenAI using retrieved SCOTUS opinion excerpts as context.
 
-Set environment variables in `.env`:
+Set environment variables in `.env` (see `.env.example`).
 
-```shell
-OPENAI_API_KEY=your-openai-api-key
-WEAVIATE_URL=http://localhost:8080
-```
-
-Run the app:
+Run the app locally:
 
 ```shell
 npm run dev
 ```
 
+Or run the full stack with Docker (see [Docker](#docker) below).
+
 Then open `http://localhost:3000`.
 
-## Dockerized scripts
+## Docker
 
-The repo includes a `Dockerfile` so you can run the scripts in a container while keeping Weaviate in Docker.
+The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together.
 
-Start Weaviate:
+### Running the full stack
 
 ```shell
-docker compose up -d weaviate
+cp .env.example .env   # fill in OPENAI_API_KEY
+docker compose up --build
 ```
 
-Run a script:
+The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
+
+### Running scripts against the Dockerized stack
 
 ```shell
-docker compose run --rm app npm run <SCRIPT>
+# scrape opinions and store in SQLite
+docker compose run --rm app npm run scrape-opinions
+
+# upload opinion chunks to Weaviate
+docker compose run --rm app npm run upload-opinions
+
+# inspect Weaviate health and collection counts
+docker compose run --rm app npm run inspect-weaviate
 ```
 
 ## Test
@@ -91,11 +93,14 @@ npm test
 
 ## Tech stack
 
+- **Web framework**: Next.js 15 (React 19, App Router)
 - **Scraping**: axios + cheerio
 - **PDF extraction**: pdf-parse
 - **Database**: SQLite via better-sqlite3 + Kysely (type-safe query builder)
-- **Embeddings**: OpenAI `text-embedding-3-small`
+- **Embeddings & chat**: OpenAI (`text-embedding-3-small`, `gpt-4o`)
 - **Vector store**: Weaviate (local, via Docker)
+- **Validation**: Zod
+- **Observability**: LangSmith (optional tracing)
 
 ## Data sources
 
