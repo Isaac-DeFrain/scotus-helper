@@ -125,10 +125,9 @@ export interface OpinionFilter {
  * @returns A Kysely database connection
  */
 export function openDb(dbPath: string): Kysely<AppDatabase> {
-  console.debug("Opening database connection to:", dbPath);
-
   const isInMemoryDb =
     dbPath === ":memory:" || dbPath.startsWith("file::memory:");
+
   if (!isInMemoryDb && !fs.existsSync(dbPath)) {
     console.debug("Database file does not exist. Creating:", dbPath);
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });

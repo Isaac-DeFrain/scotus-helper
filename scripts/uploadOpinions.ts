@@ -30,9 +30,11 @@ import {
   DELAY_MS,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
+  SQLITE_INSERT_BATCH_SIZE,
   WEAVIATE_COLLECTION_NAME,
 } from "../src/constants";
 import { delay } from "./scrape/utils";
+import { OpinionChunk } from "@/src/libs/opinionUtils";
 
 dotenv.config();
 
@@ -135,41 +137,51 @@ async function ensureChunksEmbedded(
       created_at: new Date().toISOString(),
     }));
 
-    await db.insertInto("opinion_chunks").values(inserts).execute();
+    // Batch insert into SQLite to avoid hitting the limit on the number of parameters.
+    for (let i = 0; i < inserts.length; i += SQLITE_INSERT_BATCH_SIZE) {
+      await db
+        .insertInto("opinion_chunks")
+        .values(inserts.slice(i, i + SQLITE_INSERT_BATCH_SIZE))
+        .execute();
+    }
 
     console.log(`    Cached ${chunks.length} chunks`);
-    await delay(DELAY_MS);
   }
 }
 
 /**
- * Load all cached chunks from SQLite and return them as WeaviateChunkRows,
- * ready for upload.
+ * Yields cached chunks from SQLite in pages of `pageSize` rows to avoid
+ * loading the full table (with parsed embeddings) into memory at once.
  */
-async function loadChunksFromDb(
+async function* streamChunksFromDb(
   db: Kysely<AppDatabase>,
-): Promise<WeaviateChunkRow[]> {
-  const cached = await db
-    .selectFrom("opinion_chunks")
-    .selectAll()
-    .orderBy("docket", "asc")
-    .orderBy("chunk_index", "asc")
-    .execute();
+  pageSize: number,
+): AsyncGenerator<WeaviateChunkRow[]> {
+  let offset = 0;
 
-  return cached.map((row) =>
-    weaviateChunkRowSchema.parse({
-      ...row,
-      embedding: JSON.parse(row.embedding),
-    }),
-  );
-}
+  while (true) {
+    const page = await db
+      .selectFrom("opinion_chunks")
+      .selectAll()
+      .orderBy("docket", "asc")
+      .orderBy("chunk_index", "asc")
+      .limit(pageSize)
+      .offset(offset)
+      .execute();
 
-async function uploadOpinions(): Promise<void> {
-  if (!fs.existsSync(DB_PATH)) {
-    console.error(`Database not found: ${DB_PATH}`);
-    console.error("Run `npm run scrape-opinions` first.");
-    process.exit(1);
+    if (page.length === 0) break;
+
+    yield page.map((row) =>
+      weaviateChunkRowSchema.parse({
+        ...row,
+        embedding: JSON.parse(row.embedding),
+      }),
+    );
+
+    if (page.length < pageSize) break;
+    offset += pageSize;
   }
+}
 
   let client: Awaited<ReturnType<typeof weaviate.connectToLocal>>;
   try {
