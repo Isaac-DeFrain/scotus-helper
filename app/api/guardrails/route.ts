@@ -15,16 +15,9 @@ import OpenAI from "openai";
 import { NextResponse, NextRequest } from "next/server";
 import { z } from "zod";
 
+import { guardrailsRequestSchema } from "@/src/libs/guardrails";
+
 const GUARDRAILS_MODEL = "gpt-4o-mini";
-
-const guardrailsRequestSchema = z.object({
-  query: z.string().min(1),
-});
-
-export const guardrailsResponseSchema = z.object({
-  normalizedQuery: z.string(),
-  isOnTopic: z.boolean(),
-});
 
 const SYSTEM_PROMPT = `You are a query pre-processor for a Supreme Court opinion research tool.
 

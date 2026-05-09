@@ -18,10 +18,8 @@ import {
 import { openDb } from "@/src/db";
 import { connectWeaviate } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
-import {
-  POST as guardrails,
-  guardrailsResponseSchema,
-} from "@/app/api/guardrails/route";
+import { POST as guardrails } from "@/app/api/guardrails/route";
+import { guardrailsResponseSchema } from "@/src/libs/guardrails";
 
 const CHAT_MODEL = "gpt-4o-mini";
 
@@ -169,7 +167,7 @@ export async function POST(req: NextRequest) {
         },
         {
           role: "user",
-          content: `My question about the U.S. Supreme Court is: "${normalizedQuery}"
+          content: `${normalizedQuery}
 
 			Sources:
 			${context}`,
