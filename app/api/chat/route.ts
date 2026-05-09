@@ -18,11 +18,13 @@ import {
 import { openDb } from "@/src/db";
 import { connectWeaviate } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
+import { rerankChunks } from "@/src/libs/cohereRerank";
 import { POST as guardrails } from "@/app/api/guardrails/route";
 import { guardrailsResponseSchema } from "@/src/libs/guardrails";
 
 const CHAT_MODEL = "gpt-4o-mini";
-const NEAR_VECTOR_LIMIT = 25;
+// Wider candidate pool; reranking trims it down to RERANK_TOP_N before the LLM call.
+const NEAR_VECTOR_LIMIT = 40;
 
 /**
  * A source returned alongside chat responses, linking to the original PDF.
@@ -109,6 +111,7 @@ export async function POST(req: NextRequest) {
         WEAVIATE_COLLECTION_NAME,
       );
 
+      // Fetch the nearest neighbors from Weaviate.
       const result = await collection.query.nearVector(queryVector, {
         limit: NEAR_VECTOR_LIMIT,
         returnProperties: [
@@ -129,12 +132,14 @@ export async function POST(req: NextRequest) {
       await client.close();
     }
 
+    chunks = await rerankChunks(normalizedQuery, chunks);
+
     const dockets = [
       ...new Set(chunks.map((c) => c.docket).filter(Boolean) as string[]),
     ];
 
+    // Fetch the sources from the SQLite database.
     let sources: Source[] = [];
-
     if (dockets.length > 0) {
       const db = openDb(DB_PATH);
       try {
@@ -176,7 +181,7 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    return new Response(
+    return new NextResponse(
       new ReadableStream<Uint8Array>({
         async start(controller) {
           try {
