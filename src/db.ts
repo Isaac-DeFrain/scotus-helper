@@ -182,3 +182,17 @@ export async function queryOpinions(
 
   return query.orderBy("date", "desc").execute() as Promise<OpinionTextRow[]>;
 }
+
+/**
+ * Count the number of chunks in the database.
+ *
+ * @param db - Open Kysely database connection
+ * @returns The number of chunks
+ */
+export async function countChunks(db: Kysely<AppDatabase>): Promise<number> {
+  return db
+    .selectFrom("opinion_chunks")
+    .select(({ fn }) => fn.count<number>("id").as("count"))
+    .executeTakeFirstOrThrow()
+    .then((result) => result.count ?? 0);
+}

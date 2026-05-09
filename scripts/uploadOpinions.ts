@@ -13,13 +13,18 @@
  */
 
 import * as fs from "fs";
-import { Collection, vectors, type WeaviateClient } from "weaviate-client";
+import {
+  Collection,
+  vectors,
+  type WeaviateClient,
+  ErrorObject,
+} from "weaviate-client";
 import OpenAI, { APIError } from "openai";
 import dotenv from "dotenv";
 import { Kysely } from "kysely";
 import { z } from "zod";
 
-import { openDb, type AppDatabase } from "../src/db";
+import { openDb, type AppDatabase, countChunks } from "../src/db";
 import { Chunk, chunkText } from "../src/libs/chunking";
 import { connectWeaviateOrExit } from "../src/libs/weaviateClient";
 import {
@@ -291,11 +296,46 @@ async function ensureCollection(
 }
 
 /**
+ * Returns the total number of objects currently stored in the Weaviate collection,
+ * or 0 if the collection does not yet exist.
+ */
+async function countWeaviateObjects(
+  collection: Collection<OpinionChunk>,
+): Promise<number> {
+  const result = await collection.aggregate.overAll();
+  return result.totalCount ?? 0;
+}
+
+/**
+ * Builds a set of "docket::chunkIndex" keys for every object already present
+ * in the Weaviate collection. Used to skip chunks that were uploaded in a
+ * previous run so we only send the missing ones.
+ */
+async function fetchExistingWeaviateKeys(
+  collection: Collection<OpinionChunk>,
+): Promise<Set<string>> {
+  const keys = new Set<string>();
+
+  for await (const obj of collection.iterator()) {
+    const { docket, chunkIndex } = obj.properties as {
+      docket: string;
+      chunkIndex: number;
+    };
+
+    keys.add(`${docket}::${chunkIndex}`);
+  }
+
+  return keys;
+}
+
+/**
  * Orchestrates the full upload pipeline:
  *   1. Ensures the SQLite database exists.
  *   2. Calls `ensureChunksEmbedded` to chunk and embed any opinions not yet cached.
  *   3. Ensures the Weaviate collection exists.
- *   4. Streams cached chunks from SQLite in pages and batch-inserts them into Weaviate.
+ *   4. Fast-path: if Weaviate object count equals SQLite chunk count, skips upload.
+ *   5. Otherwise builds a skip-set of existing Weaviate keys and streams only
+ *      missing chunks from SQLite into Weaviate.
  */
 async function uploadOpinions(): Promise<void> {
   if (!fs.existsSync(DB_PATH)) {
@@ -313,16 +353,44 @@ async function uploadOpinions(): Promise<void> {
 
     try {
       const collection = await ensureCollection(client);
+      const totalChunks = await countChunks(db);
+      const weaviateCount = await countWeaviateObjects(collection);
+
+      if (weaviateCount === totalChunks) {
+        console.log(
+          `Weaviate is up to date (${weaviateCount} chunks). Nothing to upload.`,
+        );
+        return;
+      }
+
+      if (weaviateCount > totalChunks) {
+        console.error(
+          `Weaviate has more chunks than SQLite (${weaviateCount} > ${totalChunks}). Please delete the Weaviate collection and try again.`,
+        );
+        process.exit(1);
+      }
+
+      console.log(
+        `Weaviate has ${weaviateCount} of ${totalChunks} chunks. Building skip-set...`,
+      );
+
+      const existingKeys = await fetchExistingWeaviateKeys(collection);
+      console.log(`Skip-set ready (${existingKeys.size} existing keys).`);
 
       let successCount = 0;
       let errorCount = 0;
       let batchNum = 0;
 
       for await (const page of streamChunksFromDb(db, BATCH_SIZE)) {
-        batchNum += 1;
-        console.log(`  Batch ${batchNum} (${page.length} chunks)...`);
+        const missing = page.filter(
+          (row) => !existingKeys.has(`${row.docket}::${row.chunk_index}`),
+        );
 
-        const objects = page.map((row) => ({
+        if (missing.length === 0) continue;
+
+        batchNum += 1;
+
+        const objects = missing.map((row) => ({
           properties: {
             text: row.content,
             docket: row.docket,
@@ -339,22 +407,30 @@ async function uploadOpinions(): Promise<void> {
 
         try {
           const batchResult = await collection.data.insertMany(objects);
-          successCount += page.length;
-          console.debug(
-            `  Results: ${JSON.stringify(batchResult.allResponses, null, 2)}`,
-          );
+          const errors: ErrorObject<OpinionChunk>[] = [];
+
+          if (batchResult.hasErrors) {
+            errors.push(...Object.values(batchResult.errors));
+            console.warn(
+              `  Batch ${batchNum} failed:`,
+              errors.map((e) => e.message).join(", "),
+            );
+          }
+
+          successCount += missing.length - errors.length;
         } catch (err) {
-          errorCount += page.length;
+          errorCount += missing.length;
           console.warn(`  Batch ${batchNum} failed:`, (err as Error).message);
         }
 
-        console.log(`  Uploaded ${successCount} chunks so far...`);
+        const uploaded = weaviateCount + successCount;
+        console.log(
+          `  Uploaded ${uploaded} of ${totalChunks - weaviateCount} chunks so far...`,
+        );
       }
 
       if (successCount === 0 && errorCount === 0) {
-        console.log(
-          "No chunks to upload after embedding. Nothing to send to Weaviate.",
-        );
+        console.log("No missing chunks found. Nothing to send to Weaviate.");
         return;
       }
 
