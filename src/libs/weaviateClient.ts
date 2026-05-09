@@ -38,8 +38,13 @@ function parseWeaviateUrl(raw: string): {
   return { httpHost, httpPort, httpSecure, grpcHost, grpcPort, grpcSecure };
 }
 
+const CONNECT_RETRIES = 15;
+const CONNECT_RETRY_DELAY_MS = 5000;
+
 /**
- * Connect to the Weaviate instance
+ * Connect to the Weaviate instance, retrying on transient startup failures.
+ * The Docker healthcheck gates on HTTP readiness, but the gRPC port may take
+ * a moment longer — retries cover that gap.
  *
  * @returns The Weaviate client
  */
@@ -48,19 +53,35 @@ export async function connectWeaviate(): Promise<
 > {
   const raw = process.env.WEAVIATE_URL?.trim() || "http://localhost:8080";
 
-  if (raw === "http://localhost:8080") {
-    return await weaviate.connectToLocal();
+  const connect = () => {
+    if (raw === "http://localhost:8080") {
+      return weaviate.connectToLocal();
+    }
+
+    const { httpHost, httpPort, httpSecure, grpcHost, grpcPort, grpcSecure } =
+      parseWeaviateUrl(raw);
+
+    return weaviate.connectToCustom({
+      httpHost,
+      httpPort,
+      httpSecure,
+      grpcHost,
+      grpcPort,
+      grpcSecure,
+    });
+  };
+
+  for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
+    try {
+      return await connect();
+    } catch (err) {
+      if (attempt === CONNECT_RETRIES) throw err;
+      console.warn(
+        `Weaviate connection attempt ${attempt}/${CONNECT_RETRIES} failed, retrying in ${CONNECT_RETRY_DELAY_MS}ms…`,
+      );
+      await new Promise((res) => setTimeout(res, CONNECT_RETRY_DELAY_MS));
+    }
   }
 
-  const { httpHost, httpPort, httpSecure, grpcHost, grpcPort, grpcSecure } =
-    parseWeaviateUrl(raw);
-
-  return await weaviate.connectToCustom({
-    httpHost,
-    httpPort,
-    httpSecure,
-    grpcHost,
-    grpcPort,
-    grpcSecure,
-  });
+  throw new Error("Unreachable");
 }

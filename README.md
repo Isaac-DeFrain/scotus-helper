@@ -42,45 +42,40 @@ Use [Docker](#docker) or follow these steps:
 
 ## Docker
 
-The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together.
+The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together. A `Makefile` wraps every `docker compose` command and automatically injects your host `UID`/`GID` as build args so files written into the `./data` volume are owned by you, not root.
 
 ### Running the full stack
 
 ```shell
 cp .env.example .env   # fill in OPENAI_API_KEY
-docker compose up --build
+make up
 ```
 
 The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
 
 ### Automatic daily sync (cron)
 
-The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `docker compose up`.
+The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `make up`.
 
 View its output:
 
 ```shell
-docker compose logs -f cron
+make logs SERVICE=cron
 ```
 
 To change the schedule, edit the `RUN echo "0 8 * * * …"` line in `Dockerfile.cron` using standard cron syntax, then rebuild:
 
 ```shell
-docker compose build cron
+make build
 docker compose up -d cron
 ```
 
 ### Running scripts against the Dockerized stack
 
 ```shell
-# scrape opinions and store in SQLite
-docker compose run --rm app npm run scrape-opinions
-
-# upload opinion chunks to Weaviate
-docker compose run --rm app npm run upload-opinions
-
-# inspect Weaviate health and collection counts
-docker compose run --rm app npm run inspect-weaviate
+make scrape   # scrape opinions and store in SQLite
+make upload   # upload opinion chunks to Weaviate
+make inspect  # inspect Weaviate health and collection counts
 ```
 
 ## Scripts
