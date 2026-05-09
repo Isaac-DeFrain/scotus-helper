@@ -17,6 +17,12 @@ services:
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   app:
     build:
@@ -25,7 +31,8 @@ services:
     ports:
       - 3000:3000
     depends_on:
-      - weaviate
+      weaviate:
+        condition: service_healthy
     env_file:
       - .env
     environment:
