@@ -60,7 +60,7 @@ export interface AppDatabase {
 /**
  * SQL DDL for the database schema
  */
-const DDL = `
+export const DDL = `
   CREATE TABLE IF NOT EXISTS opinions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     opinion_number INTEGER,
