@@ -20,6 +20,7 @@ services:
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      CLUSTER_HOSTNAME: "weaviate"
     healthcheck:
       test:
         ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
