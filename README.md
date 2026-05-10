@@ -1,6 +1,6 @@
 # scotus-opinion-helper
 
-A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). On first launch it scrapes [merits](https://www.supremecourt.gov/opinions/slipopinion) and [orders](https://www.supremecourt.gov/opinions/relatingtoorders) listings, extracts full text from PDFs, chunks and embeds the content with OpenAI, and loads the vectors into [Weaviate](https://github.com/weaviate/weaviate) — then starts a Next.js chat UI backed by [`gpt-4o-mini`](https://developers.openai.com/api/docs/models/gpt-4o-mini) that lets you ask questions across all indexed opinions. A daily cron job keeps the corpus current.
+A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). On first launch it scrapes [merits](https://www.supremecourt.gov/opinions/slipopinion) and [orders](https://www.supremecourt.gov/opinions/relatingtoorders) listings, extracts full text from PDFs, chunks and embeds the content with OpenAI, and loads the vectors into [Weaviate](https://github.com/weaviate/weaviate) — then starts a Next.js chat UI backed by [`gpt-4o-mini`](https://platform.openai.com/docs/models/gpt-4o-mini) and [`gpt-4o`](https://platform.openai.com/docs/models/gpt-4o) that lets you ask questions across all indexed opinions. Responses include source citations linked to the original PDFs. A daily cron job keeps the corpus current.
 
 ## Setup
 
@@ -100,13 +100,34 @@ Run all tests
 npm test
 ```
 
+## API
+
+### `POST /api/guardrails`
+
+Pre-processes every query before it reaches the chat model. Uses `gpt-4o-mini` to:
+
+- **Normalize** the query — fixes spelling, expands abbreviations (e.g. `SCOTUS` → `Supreme Court`), and rephrases it as a clear question while preserving intent.
+- **Topic-filter** — returns `isOnTopic: false` for queries unrelated to U.S. Supreme Court opinions, cases, justices, or related legal topics; the chat endpoint rejects those with a `400`.
+
+Response shape:
+
+```ts
+{ normalizedQuery: string; isOnTopic: boolean }
+```
+
+### `POST /api/chat`
+
+Accepts `{ query: string }`. Runs the query through `/api/guardrails`, embeds the normalized query with `text-embedding-3-small`, retrieves the nearest opinion chunks from Weaviate (grouped by docket, deduplicated), and streams a response from `gpt-4o`. Source citations (case name, docket, PDF URL) are returned in the `X-Sources` response header as a JSON array.
+
 ## Tech stack
 
 - **Web framework**: Next.js 15 (React 19, App Router)
 - **Scraping**: axios + cheerio
 - **PDF extraction**: pdf-parse
 - **Database**: SQLite via better-sqlite3 + Kysely (type-safe query builder)
-- **Embeddings & chat**: OpenAI (`text-embedding-3-small`, `gpt-4o-mini`)
+- **Embeddings**: OpenAI `text-embedding-3-small`
+- **Guardrails**: OpenAI `gpt-4o-mini` (query normalization + topic filtering)
+- **Chat**: OpenAI `gpt-4o`
 - **Vector store**: Weaviate (local, via Docker)
 - **Validation**: Zod
 - **Observability**: LangSmith (optional tracing)
