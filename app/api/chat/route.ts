@@ -14,8 +14,9 @@ import { DB_PATH, EMBEDDING_MODEL } from "@/src/constants";
 import { openDb } from "@/src/db";
 import { connectWeaviate, searchDocuments } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
-import { POST as guardrails } from "@/app/api/guardrails/route";
-import { guardrailsResponseSchema } from "@/src/libs/guardrails";
+import { guardrailsRequestSchema, runGuardrails } from "@/src/libs/guardrails";
+import { runSelector } from "@/src/libs/selector";
+import { runSqlQueryGenerator } from "@/src/libs/sqlQueryGenerator";
 
 const CHAT_MODEL = "gpt-4o";
 
@@ -65,49 +66,72 @@ ${c.text}
  */
 export async function POST(req: NextRequest) {
   try {
-    const guardrailsResponse = await guardrails(req);
-    const { normalizedQuery, isOnTopic } = guardrailsResponseSchema.parse(
-      await guardrailsResponse.json(),
-    );
+    // Normalize the query and check if it is on topic
+    const body = await req.json();
+    const { query } = guardrailsRequestSchema.parse(body);
+    const {
+      normalizedQuery,
+      isOnTopic,
+      reason: guardrailsReason,
+    } = await runGuardrails(query);
 
     if (!isOnTopic) {
       return NextResponse.json(
-        {
-          error:
-            "Query is not on topic. Please ask a question about U.S. Supreme Court opinions, rulings, cases, justices, or related legal topics.",
-        },
+        { error: `Query is not on topic: ${guardrailsReason}` },
         { status: 400 },
       );
     }
 
     const apiKey = process.env.OPENAI_API_KEY!.trim();
     const openai = wrapOpenAI(new OpenAI({ apiKey }));
-    const client = await connectWeaviate();
+
+    // Determine the query type
+    const { queryType } = await runSelector(normalizedQuery);
 
     let chunks: OpinionChunk[] = [];
+    let sqlRows: Record<string, unknown>[] = [];
 
-    try {
-      const queryEmbedding = await openai.embeddings.create({
-        model: EMBEDDING_MODEL,
-        input: normalizedQuery,
-      });
+    if (queryType === "vector" || queryType === "both") {
+      const client = await connectWeaviate();
+      try {
+        const queryEmbedding = await openai.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: normalizedQuery,
+        });
 
-      const queryVector = queryEmbedding.data[0]?.embedding;
-      if (!queryVector) {
-        return NextResponse.json(
-          { error: "Failed to embed query" },
-          { status: 500 },
-        );
+        const queryVector = queryEmbedding.data[0]?.embedding;
+        if (!queryVector) {
+          return NextResponse.json(
+            { error: "Failed to embed query" },
+            { status: 500 },
+          );
+        }
+
+        chunks = await searchDocuments(client, queryVector);
+      } finally {
+        await client.close();
       }
-
-      chunks = await searchDocuments(client, queryVector);
-    } finally {
-      await client.close();
     }
 
-    const dockets = [
-      ...new Set(chunks.map((c) => c.docket).filter(Boolean) as string[]),
-    ];
+    if (queryType === "sql" || queryType === "both") {
+      const { kyselyQuery } = await runSqlQueryGenerator(normalizedQuery);
+      const db = openDb(DB_PATH);
+      try {
+        // kyselyQuery is a Kysely expression string returned by the LLM;
+        // execute it with db in scope.
+        sqlRows = await new Function("db", `return ${kyselyQuery}`)(db);
+      } finally {
+        await db.destroy();
+      }
+    }
+
+    const chunkDockets = chunks
+      .map((c) => c.docket)
+      .filter(Boolean) as string[];
+    const sqlDockets = sqlRows
+      .map((r) => r.docket)
+      .filter((d): d is string => typeof d === "string");
+    const dockets = [...new Set([...chunkDockets, ...sqlDockets])];
 
     // Fetch the sources from the SQLite database.
     let sources: Source[] = [];
@@ -130,7 +154,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const context = buildContext(chunks);
+    const vectorContext = buildContext(chunks);
+    const sqlContext =
+      sqlRows.length > 0
+        ? `<SQL_RESULTS>\n${JSON.stringify(sqlRows, null, 2)}\n</SQL_RESULTS>`
+        : "";
+    const context = [vectorContext, sqlContext].filter(Boolean).join("\n\n");
     const encoder = new TextEncoder();
 
     const stream = await openai.chat.completions.create({
