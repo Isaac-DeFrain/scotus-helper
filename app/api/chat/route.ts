@@ -10,21 +10,14 @@ import { wrapOpenAI } from "langsmith/wrappers/openai";
 import OpenAI from "openai";
 import { NextResponse, NextRequest } from "next/server";
 
-import {
-  DB_PATH,
-  EMBEDDING_MODEL,
-  WEAVIATE_COLLECTION_NAME,
-} from "@/src/constants";
+import { DB_PATH, EMBEDDING_MODEL } from "@/src/constants";
 import { openDb } from "@/src/db";
-import { connectWeaviate } from "@/src/libs/weaviateClient";
+import { connectWeaviate, searchDocuments } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
-import { rerankChunks } from "@/src/libs/cohereRerank";
 import { POST as guardrails } from "@/app/api/guardrails/route";
 import { guardrailsResponseSchema } from "@/src/libs/guardrails";
 
-const CHAT_MODEL = "gpt-4o-mini";
-// Wider candidate pool; reranking trims it down to RERANK_TOP_N before the LLM call.
-const NEAR_VECTOR_LIMIT = 40;
+const CHAT_MODEL = "gpt-4o";
 
 /**
  * A source returned alongside chat responses, linking to the original PDF.
@@ -107,27 +100,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const collection = client.collections.get<OpinionChunk>(
-        WEAVIATE_COLLECTION_NAME,
-      );
-
-      // Fetch the nearest neighbors from Weaviate.
-      const result = await collection.query.nearVector(queryVector, {
-        limit: NEAR_VECTOR_LIMIT,
-        returnProperties: [
-          "text",
-          "docket",
-          "caseName",
-          "opinionType",
-          "date",
-          "justice",
-          "termYear",
-          "chunkIndex",
-          "totalChunks",
-        ],
-      });
-
-      chunks = result.objects.map((o) => o.properties).filter(hasNonEmptyText);
+      chunks = await searchDocuments(client, queryVector);
     } finally {
       await client.close();
     }
@@ -167,8 +140,8 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "system",
-          content: `You are a careful legal research assistant with the goal of helping users find information about U.S. Supreme Court opinions.
-			Use ONLY the provided sources when answering. If the sources are insufficient, say what is missing.`,
+          content: `You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
+Use ONLY the provided sources when answering. When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
         },
         {
           role: "user",
@@ -211,8 +184,4 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
-}
-
-function hasNonEmptyText(p: OpinionChunk): boolean {
-  return p.text.trim().length > 0;
 }

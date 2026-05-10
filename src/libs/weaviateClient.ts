@@ -7,7 +7,11 @@
 import weaviate, { WeaviateClient } from "weaviate-client";
 import { z } from "zod";
 
-import { EMBEDDING_DIMENSIONS } from "../constants";
+import { EMBEDDING_DIMENSIONS, WEAVIATE_COLLECTION_NAME } from "../constants";
+import { OpinionChunk } from "./opinionUtils";
+
+const NEAR_VECTOR_LIMIT = 20;
+const OBJECTS_PER_GROUP = 2;
 
 export const weaviateChunkRowSchema = z.object({
   docket: z.string(),
@@ -99,11 +103,77 @@ export async function connectWeaviate(): Promise<
       console.warn(
         `Weaviate connection attempt ${attempt}/${CONNECT_RETRIES} failed, retrying in ${CONNECT_RETRY_DELAY_MS}ms…`,
       );
+
       await new Promise((res) => setTimeout(res, CONNECT_RETRY_DELAY_MS));
     }
   }
 
   throw new Error("Unreachable");
+}
+
+/**
+ * Removes chunks whose trimmed text is identical to an earlier chunk,
+ * preserving the first (closest) occurrence.
+ *
+ * @param chunks - Chunks sorted by ascending distance
+ * @returns Deduplicated chunks in the same order
+ */
+function deduplicateByContent(chunks: OpinionChunk[]): OpinionChunk[] {
+  const seen = new Set<string>();
+  return chunks.filter((c) => {
+    const text = c.text.trim();
+
+    if (seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+/**
+ * Searches the Weaviate collection for opinion chunks nearest to the given
+ * query vector.
+ *
+ * @param client - An open Weaviate client
+ * @param queryVector - The embedding vector to search against
+ * @param limit - Maximum number of results to return
+ * @returns Matched opinion chunks with non-empty text
+ */
+export async function searchDocuments(
+  client: WeaviateClient,
+  queryVector: number[],
+  limit = NEAR_VECTOR_LIMIT,
+): Promise<OpinionChunk[]> {
+  const collection = client.collections.get<OpinionChunk>(
+    WEAVIATE_COLLECTION_NAME,
+  );
+
+  const result = await collection.query.nearVector(queryVector, {
+    limit,
+    groupBy: {
+      property: "docket",
+      objectsPerGroup: OBJECTS_PER_GROUP,
+      numberOfGroups: NEAR_VECTOR_LIMIT,
+    },
+    returnProperties: [
+      "text",
+      "docket",
+      "caseName",
+      "opinionType",
+      "date",
+      "justice",
+      "termYear",
+      "chunkIndex",
+      "totalChunks",
+    ],
+    returnMetadata: ["distance"],
+  });
+
+  return deduplicateByContent(
+    result.objects
+      .filter((p) => p.properties.text.trim().length > 0)
+      .sort((a, b) => (a.metadata?.distance ?? 0) - (b.metadata?.distance ?? 0))
+      .map((o) => o.properties),
+  );
 }
 
 /**
