@@ -8,7 +8,7 @@ export type OpinionMetaData = {
   opinionNumber?: number;
   opinionType: OpinionType;
   termYear: number;
-  date: string;
+  date: number; // seconds since Unix epoch
   docket: string;
   caseName: string;
   justice: string;
@@ -24,7 +24,7 @@ export type OpinionChunk = {
   text: string;
   docket?: string;
   caseName?: string;
-  date?: string;
+  date?: number; // seconds since Unix epoch
   justice?: string;
   opinionType?: string;
   termYear?: number;

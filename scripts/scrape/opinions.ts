@@ -17,12 +17,12 @@ import { PDFParse } from "pdf-parse";
 
 import { BASE_URL, DELAY_MS, DB_PATH } from "../../src/constants";
 import { openDb } from "../../src/db";
-import { type OpinionMetaData } from "../../src/libs/opinionUtils";
+import { type OpinionType } from "../../src/libs/opinionUtils";
 import { delay, saveJsonBackup } from "./utils";
 import { parseMeritsListingPage } from "./merits";
 import { parseOrdersListingPage } from "./orders";
 
-function getCurrentTermYear(): number {
+function getCurrentTerm(): number {
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
   const currentTermYear =
@@ -30,20 +30,19 @@ function getCurrentTermYear(): number {
   return currentTermYear % 100;
 }
 
-function normalizeTermYear(termYear: number): number {
-  if (!Number.isFinite(termYear)) return getCurrentTermYear();
-  if (termYear < 0) return getCurrentTermYear();
-  if (termYear > 99) return termYear % 100;
-  return termYear;
+function normalizeTerm(rawTerm: number): number {
+  if (!Number.isFinite(rawTerm) || rawTerm < 0) return getCurrentTerm();
+  if (rawTerm > 99) return rawTerm % 100;
+  return rawTerm;
 }
 
 function getRequestedTerms(argv: string[]): number[] {
   const all = argv.includes("--all");
   const termArg = argv.indexOf("--term");
-  const currentTerm = getCurrentTermYear();
+  const currentTerm = getCurrentTerm();
 
   if (all) {
-    const start = normalizeTermYear(currentTerm);
+    const start = normalizeTerm(currentTerm);
     const terms: number[] = [];
 
     for (let t = start; t >= 18; t -= 1) terms.push(t);
@@ -52,30 +51,30 @@ function getRequestedTerms(argv: string[]): number[] {
 
   if (termArg !== -1 && argv[termArg + 1]) {
     const val = parseInt(argv[termArg + 1], 10);
-    if (!Number.isNaN(val)) return [normalizeTermYear(val)];
+    if (!Number.isNaN(val)) return [normalizeTerm(val)];
   }
 
-  return [normalizeTermYear(currentTerm)];
+  return [normalizeTerm(currentTerm)];
 }
 
 function getSourcesForTerm(
-  termYear: number,
-): { type: OpinionMetaData["opinionType"]; path: string }[] {
+  term: number,
+): { type: OpinionType; path: string }[] {
   return [
-    { type: "merits", path: `/opinions/slipopinion/${termYear}` },
-    { type: "orders", path: `/opinions/relatingtoorders/${termYear}` },
+    { type: "merits", path: `/opinions/slipopinion/${term}` },
+    { type: "orders", path: `/opinions/relatingtoorders/${term}` },
   ];
 }
 
 async function scrapeOpinionsForTerm(
   db: ReturnType<typeof openDb>,
-  termYear: number,
+  term: number,
 ): Promise<void> {
-  const sources = getSourcesForTerm(termYear);
+  const sources = getSourcesForTerm(term);
 
   for (const source of sources) {
     console.log(
-      `\nFetching ${source.type} listing for term ${termYear}: ${BASE_URL}${source.path}`,
+      `\nFetching ${source.type} listing for term ${term}: ${BASE_URL}${source.path}`,
     );
 
     let listingHtml: string;
@@ -96,8 +95,8 @@ async function scrapeOpinionsForTerm(
 
     const opinions =
       source.type === "merits"
-        ? parseMeritsListingPage(listingHtml, termYear)
-        : parseOrdersListingPage(listingHtml, termYear);
+        ? parseMeritsListingPage(listingHtml, term)
+        : parseOrdersListingPage(listingHtml, term);
     console.log(`  Found ${opinions.length} ${source.type} opinions`);
 
     for (const meta of opinions) {
@@ -194,7 +193,7 @@ async function scrapeOpinions(): Promise<void> {
 
   try {
     const terms = getRequestedTerms(process.argv);
-    for (const termYear of terms) await scrapeOpinionsForTerm(db, termYear);
+    for (const term of terms) await scrapeOpinionsForTerm(db, term);
   } finally {
     await db.destroy();
   }

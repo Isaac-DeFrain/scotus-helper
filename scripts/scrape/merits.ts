@@ -11,7 +11,7 @@ const MERITS_NUM_COLS = 6;
  */
 export function parseMeritsListingPage(
   html: string,
-  termYear: number,
+  term: number,
 ): OpinionMetaData[] {
   const $ = cheerio.load(html);
   const opinions: OpinionMetaData[] = [];
@@ -36,8 +36,8 @@ export function parseMeritsListingPage(
     opinions.push({
       opinionNumber,
       opinionType: "merits",
-      termYear,
-      date,
+      termYear: 2000 + term,
+      date: new Date(date).getTime() / 1000,
       docket,
       caseName,
       justice,

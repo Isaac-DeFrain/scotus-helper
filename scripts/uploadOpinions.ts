@@ -126,7 +126,6 @@ async function ensureChunksEmbedded(
       console.warn(
         `    No chunks produced (empty or unbroken text?) for ${row.docket}`,
       );
-      await delay(DELAY_MS);
       continue;
     }
 
@@ -197,7 +196,7 @@ async function ensureChunksEmbedded(
       date: row.date,
       justice: row.justice,
       term_year: row.term_year,
-      created_at: new Date().toISOString(),
+      created_at: new Date().getTime() / 1000,
     }));
 
     // Batch insert into SQLite to avoid hitting the limit on the number of parameters.

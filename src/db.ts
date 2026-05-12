@@ -18,14 +18,14 @@ export interface OpinionsTable {
   opinion_number: number | null; // absent for orders opinions
   opinion_type: OpinionType;
   term_year: number;
-  date: string;
+  date: number;
   docket: string;
   case_name: string;
   justice: string;
   citation: string;
   pdf_url: string;
   text: string;
-  created_at: ColumnType<string, string | undefined, never>;
+  created_at: ColumnType<number, number | undefined, never>;
 }
 
 /**
@@ -43,10 +43,10 @@ export interface OpinionChunksTable {
   end_char: number;
   case_name: string;
   opinion_type: string;
-  date: string;
+  date: number;
   justice: string;
   term_year: number;
-  created_at: ColumnType<string, string | undefined, never>;
+  created_at: ColumnType<number, number | undefined, never>;
 }
 
 /**
@@ -66,7 +66,7 @@ export const DDL = `
     opinion_number INTEGER,
     opinion_type   TEXT    NOT NULL,
     term_year      INTEGER NOT NULL,
-    date           TEXT    NOT NULL,
+    date           INTEGER NOT NULL,
     docket         TEXT    NOT NULL UNIQUE,
     case_name      TEXT    NOT NULL,
     justice        TEXT    NOT NULL,
@@ -87,7 +87,7 @@ export const DDL = `
     end_char     INTEGER NOT NULL,
     case_name    TEXT    NOT NULL,
     opinion_type TEXT    NOT NULL,
-    date         TEXT    NOT NULL,
+    date         INTEGER NOT NULL,
     justice      TEXT    NOT NULL,
     term_year    INTEGER NOT NULL,
     created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -104,7 +104,7 @@ export interface OpinionTextRow {
   case_name: string;
   opinion_type: OpinionType;
   term_year: number;
-  date: string;
+  date: number;
   justice: string;
   text: string;
 }

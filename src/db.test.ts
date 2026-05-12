@@ -6,7 +6,7 @@ const MERITS_OPINIONS = [
     opinion_number: 1,
     opinion_type: "merits" as const,
     term_year: 2024,
-    date: "2024-06-15",
+    date: new Date("2024-06-15").getTime() / 1000,
     docket: "22-1234",
     case_name: "Roe v. Wade",
     justice: "Roberts",
@@ -18,7 +18,7 @@ const MERITS_OPINIONS = [
     opinion_number: 2,
     opinion_type: "merits" as const,
     term_year: 2023,
-    date: "2024-05-01",
+    date: new Date("2024-05-01").getTime() / 1000,
     docket: "22-5678",
     case_name: "Marbury v. Madison",
     justice: "Thomas",
@@ -33,7 +33,7 @@ const ORDERS_OPINIONS = [
     opinion_number: null,
     opinion_type: "orders" as const,
     term_year: 2022,
-    date: "2023-10-03",
+    date: new Date("2023-10-03").getTime() / 1000,
     docket: "21-9999",
     case_name: "Smith v. Jones",
     justice: "Kagan",
@@ -67,7 +67,7 @@ describe("queryOpinions", () => {
   it("orders results by date descending", async () => {
     const rows = await queryOpinions(db);
     const dates = rows.map((r: OpinionTextRow) => r.date);
-    expect(dates).toEqual([...dates].sort((a, b) => b.localeCompare(a)));
+    expect(dates).toEqual([...dates].sort((a, b) => b - a));
   });
 
   it("filters by opinionType", async () => {

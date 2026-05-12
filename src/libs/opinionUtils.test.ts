@@ -2,8 +2,8 @@ import { buildFilename, type OpinionMetaData } from "./opinionUtils";
 
 const BASE: OpinionMetaData = {
   opinionType: "merits",
-  termYear: 23,
-  date: "2024-06-15",
+  termYear: 2023,
+  date: new Date("2024-06-15").getTime() / 1000,
   docket: "22-1234",
   caseName: "Foo v. Bar",
   justice: "Roberts",

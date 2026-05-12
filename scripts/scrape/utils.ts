@@ -29,10 +29,14 @@ export function saveJsonBackup(meta: OpinionMetaData): void {
     meta.opinionType,
     meta.termYear.toString(),
   );
+  const metadataJson = {
+    ...meta,
+    date: new Date(meta.date * 1000).toISOString().split("T")[0], // YYYY-MM-DD
+  };
 
   fs.mkdirSync(typeDir, { recursive: true });
   fs.writeFileSync(
     path.join(typeDir, buildFilename(meta)),
-    JSON.stringify(meta, null, 2),
+    JSON.stringify(metadataJson, null, 2),
   );
 }

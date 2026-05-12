@@ -11,7 +11,7 @@ const ORDERS_NUM_COLS = 5;
  */
 export function parseOrdersListingPage(
   html: string,
-  termYear: number,
+  term: number,
 ): OpinionMetaData[] {
   const $ = cheerio.load(html);
   const opinions: OpinionMetaData[] = [];
@@ -32,8 +32,8 @@ export function parseOrdersListingPage(
 
     opinions.push({
       opinionType: "orders",
-      termYear,
-      date,
+      termYear: 2000 + term,
+      date: new Date(date).getTime() / 1000,
       docket,
       caseName,
       justice,
