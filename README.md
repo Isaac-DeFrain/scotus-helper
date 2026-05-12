@@ -102,22 +102,30 @@ npm test
 
 ## API
 
-### `POST /api/guardrails`
+### `POST /api/selector`
 
-Pre-processes every query before it reaches the chat model. Uses `gpt-4o-mini` to:
+Normalizes the query, checks whether it is on-topic for U.S. Supreme Court opinions, and picks a retrieval strategy. Uses `gpt-4o-mini` (LangSmith-wrapped).
 
-- **Normalize** the query — fixes spelling, expands abbreviations (e.g. `SCOTUS` → `Supreme Court`), and rephrases it as a clear question while preserving intent.
-- **Topic-filter** — returns `isOnTopic: false` for queries unrelated to U.S. Supreme Court opinions, cases, justices, or related legal topics; the chat endpoint rejects those with a `400`.
+Request: `{ query: string }`.
 
 Response shape:
 
 ```ts
-{ normalizedQuery: string; isOnTopic: boolean }
+{
+  normalizedQuery: string;
+  isOnTopic: boolean;
+  queryType: "sql" | "vector" | "both" | "none";
+  reason: string;
+}
 ```
+
+### `POST /api/sql-query-generator`
+
+Accepts `{ normalizedQuery: string }` and returns `{ sqlQuery: string; reason: string }` — a read-only `SELECT` for the SQLite opinions schema (`gpt-4o`, LangSmith-wrapped). Used by the chat flow when structured retrieval is needed.
 
 ### `POST /api/chat`
 
-Accepts `{ query: string }`. Runs the query through `/api/guardrails`, embeds the normalized query with `text-embedding-3-small`, retrieves the nearest opinion chunks from Weaviate (grouped by docket, deduplicated), and streams a response from `gpt-4o`. Source citations (case name, docket, PDF URL) are returned in the `X-Sources` response header as a JSON array.
+Accepts `{ query: string }`. Runs the selector (`/api/selector` logic in-process), then as needed runs vector search in Weaviate and/or SQL against SQLite, and streams a response from `gpt-4o`. Off-topic queries are rejected with `400`. Source citations (case name, docket, PDF URL) are returned in the `X-Sources` response header as a JSON array.
 
 ## Tech stack
 
@@ -126,7 +134,7 @@ Accepts `{ query: string }`. Runs the query through `/api/guardrails`, embeds th
 - **PDF extraction**: pdf-parse
 - **Database**: SQLite via better-sqlite3 + Kysely (type-safe query builder)
 - **Embeddings**: OpenAI `text-embedding-3-small`
-- **Guardrails**: OpenAI `gpt-4o-mini` (query normalization + topic filtering)
+- **Query routing**: OpenAI `gpt-4o-mini` (selector: normalize + topic filter + SQL/vector/both)
 - **Chat**: OpenAI `gpt-4o`
 - **Vector store**: Weaviate (local, via Docker)
 - **Validation**: Zod
