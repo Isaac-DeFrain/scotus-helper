@@ -219,18 +219,29 @@ async function ensureChunksEmbedded(
 async function* streamChunksFromDb(
   db: Kysely<AppDatabase>,
   pageSize: number,
+  lastUploadTime: number,
 ): AsyncGenerator<WeaviateChunkRow[]> {
   let offset = 0;
 
   while (true) {
-    const page = await db
-      .selectFrom("opinion_chunks")
-      .selectAll()
-      .orderBy("docket", "asc")
-      .orderBy("chunk_index", "asc")
-      .limit(pageSize)
-      .offset(offset)
-      .execute();
+    const page =
+      lastUploadTime === 0
+        ? await db
+            .selectFrom("opinion_chunks")
+            .selectAll()
+            .orderBy("docket", "asc")
+            .orderBy("chunk_index", "asc")
+            .limit(pageSize)
+            .offset(offset)
+            .execute()
+        : await db
+            .selectFrom("opinion_chunks")
+            .selectAll()
+            .orderBy("created_at", "desc")
+            .where("created_at", ">", lastUploadTime)
+            .limit(pageSize)
+            .offset(offset)
+            .execute();
 
     if (page.length === 0) break;
 
@@ -293,25 +304,19 @@ async function countWeaviateObjects(
 }
 
 /**
- * Builds a set of "docket::chunkIndex" keys for every object already present
- * in the Weaviate collection. Used to skip chunks that were uploaded in a
- * previous run so we only send the missing ones.
+ * Returns the last update timestamp (in seconds) of the newest object in the Weaviate collection.
  */
-async function fetchExistingWeaviateKeys(
+async function lastUploadTimeSec(
   collection: Collection<OpinionChunk>,
-): Promise<Set<string>> {
-  const keys = new Set<string>();
+): Promise<number> {
+  const { objects } = await collection.query.fetchObjects({
+    limit: 1,
+    returnProperties: [],
+    returnMetadata: ["updateTime"],
+    sort: collection.sort.byUpdateTime(false),
+  });
 
-  for await (const obj of collection.iterator()) {
-    const { docket, chunkIndex } = obj.properties as {
-      docket: string;
-      chunkIndex: number;
-    };
-
-    keys.add(`${docket}::${chunkIndex}`);
-  }
-
-  return keys;
+  return (objects[0]?.metadata?.updateTime?.getTime() ?? 0) / 1000;
 }
 
 /**
@@ -357,26 +362,23 @@ async function uploadOpinions(): Promise<void> {
       }
 
       console.log(
-        `Weaviate has ${weaviateCount} of ${totalChunks} chunks. Building skip-set...`,
+        `Weaviate has ${weaviateCount} of ${totalChunks} chunks. Uploading missing chunks...`,
       );
 
-      const existingKeys = await fetchExistingWeaviateKeys(collection);
-      console.log(`Skip-set ready (${existingKeys.size} existing keys).`);
-
+      const lastUploadTime = await lastUploadTimeSec(collection);
       let successCount = 0;
       let errorCount = 0;
       let batchNum = 0;
 
-      for await (const page of streamChunksFromDb(db, BATCH_SIZE)) {
-        const missing = page.filter(
-          (row) => !existingKeys.has(`${row.docket}::${row.chunk_index}`),
-        );
-
-        if (missing.length === 0) continue;
-
+      for await (const page of streamChunksFromDb(
+        db,
+        BATCH_SIZE,
+        lastUploadTime,
+      )) {
+        if (page.length === 0) continue;
         batchNum += 1;
 
-        const objects = missing.map((row) => ({
+        const objects = page.map((row) => ({
           properties: {
             text: row.content,
             docket: row.docket,
@@ -403,15 +405,14 @@ async function uploadOpinions(): Promise<void> {
             );
           }
 
-          successCount += missing.length - errors.length;
+          successCount += page.length - errors.length;
         } catch (err) {
-          errorCount += missing.length;
+          errorCount += page.length;
           console.warn(`  Batch ${batchNum} failed:`, (err as Error).message);
         }
 
-        const uploaded = weaviateCount + successCount;
         console.log(
-          `  Uploaded ${uploaded} of ${totalChunks - weaviateCount} chunks so far...`,
+          `  Uploaded ${successCount} of ${totalChunks - weaviateCount} chunks so far...`,
         );
       }
 
