@@ -105,6 +105,7 @@ async function scrapeOpinionsForTerm(
         .selectFrom("opinions")
         .select("id")
         .where("docket", "=", meta.docket)
+        .where("justice", "=", meta.justice)
         .executeTakeFirst();
 
       if (existing) {
