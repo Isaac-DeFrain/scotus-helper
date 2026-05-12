@@ -2,12 +2,12 @@
  * SQL QUERY GENERATOR ENDPOINT
  *
  * Takes a normalized, on-topic user query and generates the appropriate
- * type-safe Kysely query builder code using the database DDL as context.
+ * SQL query using the database DDL as context.
  * Uses a LangSmith-wrapped gpt-4o model so that every call is captured in
  * LangSmith traces alongside the main chat endpoint.
  *
- * Request shape: `SqlQueryGeneratorRequestSchema`
- * Response shape: `SqlQueryGeneratorResponseSchema`
+ * Request shape: `sqlQueryGeneratorRequestSchema`
+ * Response shape: `sqlQueryGeneratorResponseSchema`
  */
 
 import { NextResponse, NextRequest } from "next/server";
@@ -21,7 +21,7 @@ import {
  * SQL query generator endpoint
  *
  * @param req - The request object containing the normalized query
- * @returns The generated Kysely query code and a brief explanation
+ * @returns The generated SQL string and a brief explanation
  */
 export async function POST(req: NextRequest) {
   try {

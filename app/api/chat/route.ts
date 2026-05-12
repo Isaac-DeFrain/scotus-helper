@@ -14,9 +14,9 @@ import { DB_PATH, EMBEDDING_MODEL } from "@/src/constants";
 import { openDb } from "@/src/db";
 import { connectWeaviate, searchDocuments } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
-import { guardrailsRequestSchema, runGuardrails } from "@/src/libs/guardrails";
-import { runSelector } from "@/src/libs/selector";
+import { selectorRequestSchema, runSelector } from "@/src/libs/selector";
 import { runSqlQueryGenerator } from "@/src/libs/sqlQueryGenerator";
+import { CompiledQuery } from "kysely";
 
 const CHAT_MODEL = "gpt-4o";
 
@@ -61,32 +61,30 @@ ${c.text}
 /**
  * Chat endpoint
  *
- * @param req - The request object
- * @returns The response object
+ * Accepts a raw user query, runs it through the selector agent (normalize,
+ * on-topic check, retrieval routing), fetches context via SQL and/or vector
+ * search as needed, then streams a GPT-4o answer with source metadata in the
+ * `X-Sources` response header.
+ *
+ * @param req - `{ query: string }` — the raw user question
+ * @returns A streaming plain-text response, or a JSON error on bad input
  */
 export async function POST(req: NextRequest) {
   try {
-    // Normalize the query and check if it is on topic
     const body = await req.json();
-    const { query } = guardrailsRequestSchema.parse(body);
-    const {
-      normalizedQuery,
-      isOnTopic,
-      reason: guardrailsReason,
-    } = await runGuardrails(query);
+    const { query } = selectorRequestSchema.parse(body);
+    const { normalizedQuery, isOnTopic, queryType, reason } =
+      await runSelector(query);
 
     if (!isOnTopic) {
       return NextResponse.json(
-        { error: `Query is not on topic: ${guardrailsReason}` },
+        { error: `Query is not on topic: ${reason}` },
         { status: 400 },
       );
     }
 
     const apiKey = process.env.OPENAI_API_KEY!.trim();
     const openai = wrapOpenAI(new OpenAI({ apiKey }));
-
-    // Determine the query type
-    const { queryType } = await runSelector(normalizedQuery);
 
     let chunks: OpinionChunk[] = [];
     let sqlRows: Record<string, unknown>[] = [];
@@ -114,12 +112,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (queryType === "sql" || queryType === "both") {
-      const { kyselyQuery } = await runSqlQueryGenerator(normalizedQuery);
+      const { sqlQuery } = await runSqlQueryGenerator(normalizedQuery);
       const db = openDb(DB_PATH);
+
       try {
-        // kyselyQuery is a Kysely expression string returned by the LLM;
-        // execute it with db in scope.
-        sqlRows = await new Function("db", `return ${kyselyQuery}`)(db);
+        sqlRows = (await db.executeQuery(CompiledQuery.raw(sqlQuery)))
+          .rows as Record<string, unknown>[];
       } finally {
         await db.destroy();
       }
@@ -176,8 +174,8 @@ Use ONLY the provided sources when answering. When citing a source, NEVER use th
           role: "user",
           content: `${normalizedQuery}
 
-			Sources:
-			${context}`,
+Sources:
+${context}`,
         },
       ],
     });

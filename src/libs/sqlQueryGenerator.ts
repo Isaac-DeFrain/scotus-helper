@@ -13,11 +13,7 @@ export const sqlQueryGeneratorRequestSchema = z.object({
 });
 
 export const sqlQueryGeneratorResponseSchema = z.object({
-  kyselyQuery: z
-    .string()
-    .describe(
-      "Type-safe Kysely query builder code (TypeScript) that answers the question",
-    ),
+  sqlQuery: z.string().describe("SQL query that answers the user's question"),
   reason: z
     .string()
     .describe("Reason why the SQL query is needed to answer the question"),
@@ -31,66 +27,33 @@ const SQL_QUERY_GENERATOR_MODEL = "gpt-4o";
 
 const SYSTEM_PROMPT = `You are a SQL query-generation agent for a Supreme Court opinion research tool.
 
-You have access to a SQLite database via the Kysely type-safe query builder. The database schema is:
+You have access to a SQLite database with the following schema:
 
 \`\`\`sql
 ${DDL}
 \`\`\`
 
-The corresponding TypeScript interfaces used with Kysely are:
+To answer the user's question, generate a valid SQL query against the above database schema.
 
-\`\`\`typescript
-interface OpinionsTable {
-  id: Generated<number>;
-  opinion_number: number | null;
-  opinion_type: "majority" | "concurrence" | "dissent" | "per_curiam" | "orders";
-  term_year: number;
-  date: string;           // ISO date string, e.g. "2023-06-30"
-  docket: string;         // UNIQUE, e.g. "22-1008"
-  case_name: string;
-  justice: string;
-  citation: string;
-  pdf_url: string;
-  text: string;
-  created_at: string;
-}
+The query should NEVER update, insert, or delete any data. It should ONLY ever be a SELECT statement.
 
-interface OpinionChunksTable {
-  id: Generated<number>;
-  docket: string;
-  chunk_index: number;
-  total_chunks: number;
-  content: string;
-  embedding: string;      // JSON-serialized number[]
-  start_char: number;
-  end_char: number;
-  case_name: string;
-  opinion_type: string;
-  date: string;
-  justice: string;
-  term_year: number;
-  created_at: string;
-}
+NEVER return the \`text\` field of an opinion.
 
-interface AppDatabase {
-  opinions: OpinionsTable;
-  opinion_chunks: OpinionChunksTable;
-}
-\`\`\`
+If the question is about a specific justice and requires a SQL query, make sure use an abbreviation for the justice's name (e.g. "JS" for "John Smith").
 
-Given the user's question, generate a type-safe Kysely query using \`db\` as the pre-existing \`Kysely<AppDatabase>\` instance. Return only the query expression — no imports, no variable declarations for \`db\`, and no \`await\` — so the caller can \`await\` it directly.
+If the question is about a specific date and requires a SQL query, make sure use the \`date\` field (in seconds since Unix epoch) to filter the results.
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {
-  "kyselyQuery": "<Kysely query expression string>",
+  "sqlQuery": "<SQL query expression string>",
   "reason": "<concise explanation of why the SQL query is needed to answer the question>"
 }`;
 
 /**
- * Generates a type-safe Kysely query for a normalized user question.
+ * Generates a SQL query for a normalized user question.
  *
  * @param normalizedQuery - The normalized, on-topic user query
- * @returns The generated Kysely query code and a brief explanation
+ * @returns The generated SQL query and a brief explanation
  */
 export async function runSqlQueryGenerator(
   normalizedQuery: string,
@@ -101,7 +64,10 @@ export async function runSqlQueryGenerator(
   const completion = await openai.chat.completions.create({
     model: SQL_QUERY_GENERATOR_MODEL,
     temperature: 0,
-    response_format: zodResponseFormat(sqlQueryGeneratorResponseSchema, "sql_query_generator"),
+    response_format: zodResponseFormat(
+      sqlQueryGeneratorResponseSchema,
+      "sql_query_generator",
+    ),
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: normalizedQuery },
