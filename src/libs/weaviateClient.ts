@@ -23,10 +23,10 @@ export const weaviateChunkRowSchema = z.object({
   end_char: z.number().int().nonnegative(),
   case_name: z.string(),
   opinion_type: z.string(),
-  date: z.number().int(),
+  date: z.number(),
   justice: z.string(),
   term_year: z.number().int(),
-  created_at: z.number().int(),
+  created_at: z.number(),
 });
 
 export type WeaviateChunkRow = z.infer<typeof weaviateChunkRowSchema>;

@@ -23,13 +23,13 @@ export type OpinionMetaData = {
 export type OpinionChunk = {
   text: string;
   docket?: string;
-  caseName?: string;
-  date?: number; // seconds since Unix epoch
-  justice?: string;
-  opinionType?: string;
-  termYear?: number;
-  chunkIndex?: number;
-  totalChunks?: number;
+  caseName: string;
+  date: number; // seconds since Unix epoch
+  justice: string;
+  opinionType: string;
+  termYear: number;
+  chunkIndex: number;
+  totalChunks: number;
 };
 
 /**

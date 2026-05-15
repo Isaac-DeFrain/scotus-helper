@@ -73,7 +73,7 @@ export const DDL = `
     citation       TEXT    NOT NULL,
     pdf_url        TEXT    NOT NULL,
     text           TEXT    NOT NULL,
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at     INTEGER NOT NULL DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS opinion_chunks (
@@ -90,7 +90,7 @@ export const DDL = `
     date         INTEGER NOT NULL,
     justice      TEXT    NOT NULL,
     term_year    INTEGER NOT NULL,
-    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at   INTEGER NOT NULL DEFAULT (datetime('now')),
     UNIQUE (docket, chunk_index)
   );
 `;
