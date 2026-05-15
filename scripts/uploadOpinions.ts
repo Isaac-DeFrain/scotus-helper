@@ -23,13 +23,13 @@ import OpenAI, { APIError } from "openai";
 import dotenv from "dotenv";
 import { Kysely } from "kysely";
 
-import { openDb, type AppDatabase, countChunks } from "../src/db";
-import { Chunk, chunkText } from "../src/libs/chunking";
+import { openDb, type AppDatabase, countChunks } from "@/src/db";
+import { Chunk, chunkText } from "@/src/libs/chunking";
 import {
   connectWeaviateOrExit,
   weaviateChunkRowSchema,
   type WeaviateChunkRow,
-} from "../src/libs/weaviateClient";
+} from "@/src/libs/weaviateClient";
 import {
   BATCH_SIZE,
   CHARS_PER_TOKEN,
@@ -43,8 +43,8 @@ import {
   MAX_EMBEDDING_TOKENS,
   SQLITE_INSERT_BATCH_SIZE,
   WEAVIATE_COLLECTION_NAME,
-} from "../src/constants";
-import { delay } from "./scrape/utils";
+} from "@/src/constants";
+import { delay } from "@/src/libs/utils";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
 
 dotenv.config();
@@ -318,6 +318,17 @@ async function lastUploadTimeSec(
   return (objects[0]?.metadata?.updateTime?.getTime() ?? 0) / 1000;
 }
 
+/** Single-line progress for TTY; ASCII bar for broad terminal support. */
+function formatWeaviateUploadProgress(done: number, total: number): string {
+  const barWidth = 28;
+  const denom = Math.max(total, 1);
+  const clamped = Math.min(Math.max(done, 0), total);
+  const filled = Math.round((barWidth * clamped) / denom);
+  const bar = "#".repeat(filled) + "-".repeat(barWidth - filled);
+  const pct = total === 0 ? 100 : Math.round((100 * clamped) / total);
+  return `  [${bar}] ${clamped}/${total} chunks (${pct}%)`;
+}
+
 /**
  * Orchestrates the full upload pipeline:
  *   1. Ensures the SQLite database exists.
@@ -365,9 +376,12 @@ async function uploadOpinions(): Promise<void> {
       );
 
       const lastUploadTime = await lastUploadTimeSec(collection);
+      const totalToUpload = totalChunks - weaviateCount;
+
       let successCount = 0;
       let errorCount = 0;
       let batchNum = 0;
+      let progressBatches = 0;
 
       for await (const page of streamChunksFromDb(
         db,
@@ -398,6 +412,7 @@ async function uploadOpinions(): Promise<void> {
 
           if (batchResult.hasErrors) {
             errors.push(...Object.values(batchResult.errors));
+            process.stdout.write("\n");
             console.warn(
               `  Batch ${batchNum} failed:`,
               errors.map((e) => e.message).join(", "),
@@ -407,12 +422,18 @@ async function uploadOpinions(): Promise<void> {
           successCount += page.length - errors.length;
         } catch (err) {
           errorCount += page.length;
+          process.stdout.write("\n");
           console.warn(`  Batch ${batchNum} failed:`, (err as Error).message);
         }
 
-        console.log(
-          `  Uploaded ${successCount} of ${totalChunks - weaviateCount} chunks so far...`,
+        process.stdout.write(
+          `\r${formatWeaviateUploadProgress(successCount, totalToUpload)}`,
         );
+        progressBatches += 1;
+      }
+
+      if (progressBatches > 0) {
+        process.stdout.write("\n");
       }
 
       if (successCount === 0 && errorCount === 0) {

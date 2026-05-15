@@ -80,7 +80,7 @@ make inspect  # inspect Weaviate health and collection counts
 
 ## Scripts
 
-1. `npm run scrape-opinions` — fetches the merits and orders listing pages, downloads each PDF, extracts full text, and upserts opinion rows into SQLite (`data/opinions.db`). Lightweight JSON metadata backups are written to `data/opinions/{opinionType}/{termYear}/`. Defaults to the current term.
+1. `npm run scrape-opinions` — fetches the merits and orders listing pages, downloads each PDF, extracts text, and upserts opinion rows into SQLite (`data/opinions.db`). If a listing link includes `#page=N`, only pages from that start through the next opinion in the same file (or the end of the PDF) are stored; otherwise the whole PDF is used. Rows that share the same file batch one download. Lightweight JSON metadata backups are written to `data/opinions/{opinionType}/{termYear}/`. Defaults to the current term.
 
     | Flag | Behaviour |
     | ---- | --------- |

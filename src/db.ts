@@ -196,3 +196,22 @@ export async function countChunks(db: Kysely<AppDatabase>): Promise<number> {
     .executeTakeFirstOrThrow()
     .then((result) => result.count ?? 0);
 }
+
+/**
+ * Count opinions stored for a given term year.
+ *
+ * @param db       - Open Kysely database connection
+ * @param termYear - Calendar year of the term (e.g. 2024 for OT24)
+ * @returns Row count in `opinions` for that term
+ */
+export async function countOpinionsForTermYear(
+  db: Kysely<AppDatabase>,
+  termYear: number,
+): Promise<number> {
+  return db
+    .selectFrom("opinions")
+    .select(({ fn }) => fn.count<number>("id").as("count"))
+    .where("term_year", "=", termYear)
+    .executeTakeFirstOrThrow()
+    .then((result) => Number(result.count ?? 0));
+}

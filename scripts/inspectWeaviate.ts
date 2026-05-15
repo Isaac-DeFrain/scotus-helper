@@ -7,8 +7,8 @@
 
 import dotenv from "dotenv";
 
-import { WEAVIATE_COLLECTION_NAME } from "../src/constants";
-import { connectWeaviate } from "../src/libs/weaviateClient";
+import { WEAVIATE_COLLECTION_NAME } from "@/src/constants";
+import { connectWeaviate } from "@/src/libs/weaviateClient";
 
 dotenv.config();
 

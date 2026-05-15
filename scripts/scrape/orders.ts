@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 
-import { type OpinionMetaData } from "../../src/libs/opinionUtils";
+import { type OpinionMetaData } from "@/src/libs/opinionUtils";
 import { buildPdfUrl } from "./utils";
 
 const ORDERS_NUM_COLS = 5;

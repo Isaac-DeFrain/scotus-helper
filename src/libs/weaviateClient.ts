@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { EMBEDDING_DIMENSIONS, WEAVIATE_COLLECTION_NAME } from "../constants";
 import { OpinionChunk } from "./opinionUtils";
+import { delay } from "./utils";
 
 const NEAR_VECTOR_LIMIT = 20;
 const OBJECTS_PER_GROUP = 2;
@@ -96,20 +97,25 @@ export async function connectWeaviate(): Promise<
     });
   };
 
+  let error: Error | unknown;
   for (let attempt = 1; attempt <= CONNECT_RETRIES; attempt++) {
     try {
       return await connect();
     } catch (err) {
-      if (attempt === CONNECT_RETRIES) throw err;
+      if (attempt === CONNECT_RETRIES) {
+        error = err as Error;
+        break;
+      }
+
       console.warn(
         `Weaviate connection attempt ${attempt}/${CONNECT_RETRIES} failed, retrying in ${CONNECT_RETRY_DELAY_MS}ms…`,
       );
 
-      await new Promise((res) => setTimeout(res, CONNECT_RETRY_DELAY_MS));
+      await delay(CONNECT_RETRY_DELAY_MS);
     }
   }
 
-  throw new Error("Unreachable");
+  throw error;
 }
 
 /**
