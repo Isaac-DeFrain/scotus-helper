@@ -38,6 +38,8 @@ services:
         GID: ${GID:-1000}
     env_file:
       - .env
+    environment:
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "scrape-opinions", "--", "--all"]
@@ -59,6 +61,7 @@ services:
       - .env
     environment:
       WEAVIATE_URL: http://weaviate:8080
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "upload-opinions"]
@@ -79,6 +82,7 @@ services:
       - .env
     environment:
       WEAVIATE_URL: http://weaviate:8080
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
     volumes:
       - ./data:/app/data
 
@@ -97,6 +101,7 @@ services:
       - .env
     environment:
       WEAVIATE_URL: http://weaviate:8080
+      NPM_CONFIG_UPDATE_NOTIFIER: "false"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
