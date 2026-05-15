@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { wrapOpenAI } from "langsmith/wrappers/openai";
-import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
+import { openaiClient } from "./openai";
 
 export const selectorRequestSchema = z.object({
   query: z.string().min(1).describe("The raw user query"),
@@ -52,6 +51,7 @@ Your task has three parts:
 Here are some examples of queries and the appropriate retrieval strategy:
 - "How many opinions were decided in 2023?": "sql"
 - "What did the Court say about religious liberty?": "vector"
+- "Which justices dissented from the majority opinion in the case of Doe v. Smith?": "both"
 - "What is the most recent opinion on abortion?": "both"
 - "How many cases has a U.S. attorney general brought before the Supreme Court?": "both"
 - "How many cases has a U.S. president brought before the Supreme Court?": "both"
@@ -74,9 +74,7 @@ Respond ONLY with a JSON object matching this schema exactly (no markdown, no ex
  * @returns The normalized query, on-topic flag, query type, and reasoning
  */
 export async function runSelector(query: string): Promise<SelectorResponse> {
-  const apiKey = process.env.OPENAI_API_KEY!.trim();
-  const openai = wrapOpenAI(new OpenAI({ apiKey }));
-
+  const openai = openaiClient();
   const completion = await openai.chat.completions.create({
     model: SELECTOR_MODEL,
     temperature: 0,

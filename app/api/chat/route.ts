@@ -6,57 +6,21 @@
  * The context is the retrieved opinion chunks from Weaviate.
  */
 
-import { wrapOpenAI } from "langsmith/wrappers/openai";
-import OpenAI from "openai";
 import { NextResponse, NextRequest } from "next/server";
 
 import { DB_PATH, EMBEDDING_MODEL } from "@/src/constants";
-import { openDb } from "@/src/db";
+import { openReadOnlyDb } from "@/src/db";
 import { connectWeaviate, searchDocuments } from "@/src/libs/weaviateClient";
 import { OpinionChunk } from "@/src/libs/opinionUtils";
 import { selectorRequestSchema, runSelector } from "@/src/libs/selector";
-import { runSqlQueryGenerator } from "@/src/libs/sqlQueryGenerator";
-import { CompiledQuery } from "kysely";
+import {
+  runSqlQueryGenerator,
+  validateAndParseSqlQuery,
+} from "@/src/libs/sqlQueryGenerator";
+import { buildContext, getSources } from "@/src/libs/chat";
+import { openaiClient } from "@/src/libs/openai";
 
 const CHAT_MODEL = "gpt-4o";
-
-/**
- * A source returned alongside chat responses, linking to the original PDF.
- */
-export type Source = {
-  caseName: string;
-  docket: string;
-  pdfUrl: string;
-};
-
-/**
- * Builds the context for the chat endpoint.
- *
- * @param chunks - The chunks to build the context from
- * @returns The context
- */
-function buildContext(chunks: OpinionChunk[]): string {
-  return chunks
-    .map((c, i) => {
-      const headerParts = [
-        c.caseName,
-        c.docket ? `No. ${c.docket}` : undefined,
-        c.opinionType,
-        c.date,
-        c.justice ? `Justice: ${c.justice}` : undefined,
-        typeof c.chunkIndex === "number" && typeof c.totalChunks === "number"
-          ? `Chunk ${c.chunkIndex + 1}/${c.totalChunks}`
-          : undefined,
-      ].filter(Boolean);
-
-      return `<SOURCE_${i + 1}>
-${headerParts.join(" | ")}
-
-${c.text}
-</SOURCE_${i + 1}>`;
-    })
-    .join("\n\n");
-}
 
 /**
  * Chat endpoint
@@ -83,12 +47,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY!.trim();
-    const openai = wrapOpenAI(new OpenAI({ apiKey }));
-
+    const openai = openaiClient();
     let chunks: OpinionChunk[] = [];
     let sqlRows: Record<string, unknown>[] = [];
 
+    // Vector search
     if (queryType === "vector" || queryType === "both") {
       const client = await connectWeaviate();
       try {
@@ -111,18 +74,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // SQL search
     if (queryType === "sql" || queryType === "both") {
       const { sqlQuery } = await runSqlQueryGenerator(normalizedQuery);
-      const db = openDb(DB_PATH);
+      const db = openReadOnlyDb(DB_PATH);
 
       try {
-        sqlRows = (await db.executeQuery(CompiledQuery.raw(sqlQuery)))
-          .rows as Record<string, unknown>[];
+        const compiledQuery = validateAndParseSqlQuery(sqlQuery);
+        const result = await db.executeQuery(compiledQuery);
+        sqlRows = result.rows as Record<string, unknown>[];
       } finally {
         await db.destroy();
       }
     }
 
+    // Combine dockets from vector and SQL search
     const chunkDockets = chunks
       .map((c) => c.docket)
       .filter(Boolean) as string[];
@@ -131,27 +97,8 @@ export async function POST(req: NextRequest) {
       .filter((d): d is string => typeof d === "string");
     const dockets = [...new Set([...chunkDockets, ...sqlDockets])];
 
-    // Fetch the sources from the SQLite database.
-    let sources: Source[] = [];
-    if (dockets.length > 0) {
-      const db = openDb(DB_PATH);
-      try {
-        const rows = await db
-          .selectFrom("opinions")
-          .select(["docket", "case_name", "pdf_url"])
-          .where("docket", "in", dockets)
-          .execute();
-
-        sources = rows.map((r) => ({
-          caseName: r.case_name,
-          docket: r.docket,
-          pdfUrl: r.pdf_url,
-        }));
-      } finally {
-        await db.destroy();
-      }
-    }
-
+    // Fetch the sources from the SQLite database
+    const sources = await getSources(dockets);
     const vectorContext = buildContext(chunks);
     const sqlContext =
       sqlRows.length > 0
@@ -168,13 +115,13 @@ export async function POST(req: NextRequest) {
         {
           role: "system",
           content: `You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
-Use ONLY the provided sources when answering. When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
+Use ONLY the provided sources and SQL results when answering. When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
         },
         {
           role: "user",
           content: `${normalizedQuery}
 
-Sources:
+Sources and SQL results:
 ${context}`,
         },
       ],
@@ -200,7 +147,7 @@ ${context}`,
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           "Cache-Control": "no-store",
-          "X-Sources": JSON.stringify(sources),
+          "X-Sources": Buffer.from(JSON.stringify(sources)).toString("base64"),
         },
       },
     );

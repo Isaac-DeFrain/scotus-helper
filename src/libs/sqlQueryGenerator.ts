@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { wrapOpenAI } from "langsmith/wrappers/openai";
-import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 
-import { DDL } from "@/src/db";
+import { DDL } from "../db";
+import { CompiledQuery } from "kysely";
+import { openaiClient } from "./openai";
 
 export const sqlQueryGeneratorRequestSchema = z.object({
   normalizedQuery: z
@@ -35,13 +35,9 @@ ${DDL}
 
 To answer the user's question, generate a valid SQL query against the above database schema.
 
-The query should NEVER update, insert, or delete any data. It should ONLY ever be a SELECT statement.
+The query should ONLY ever read data from the database, i.e. it should ONLY ever be a SELECT statement.
 
-NEVER return the \`text\` field of an opinion.
-
-If the question is about a specific justice and requires a SQL query, make sure use an abbreviation for the justice's name (e.g. "JS" for "John Smith").
-
-If the question is about a specific date and requires a SQL query, make sure use the \`date\` field (in seconds since Unix epoch) to filter the results.
+If the question is about a specific date, make sure to use the \`date\` field (in seconds since Unix epoch) to filter the results.
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {
@@ -58,9 +54,7 @@ Respond ONLY with a JSON object matching this schema exactly (no markdown, no ex
 export async function runSqlQueryGenerator(
   normalizedQuery: string,
 ): Promise<SqlQueryGeneratorResponse> {
-  const apiKey = process.env.OPENAI_API_KEY!.trim();
-  const openai = wrapOpenAI(new OpenAI({ apiKey }));
-
+  const openai = openaiClient();
   const completion = await openai.chat.completions.create({
     model: SQL_QUERY_GENERATOR_MODEL,
     temperature: 0,
@@ -76,4 +70,32 @@ export async function runSqlQueryGenerator(
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
   return sqlQueryGeneratorResponseSchema.parse(JSON.parse(raw));
+}
+
+/**
+ * Validates and parses a raw SQL query into a compiled query.
+ *
+ * @param rawSqlQuery - The raw SQL query to validate and parse
+ * @returns The compiled query
+ */
+export function validateAndParseSqlQuery(rawSqlQuery: string) {
+  // Query must be a SELECT statement
+  const sqlQuery = rawSqlQuery.trim();
+  if (!sqlQuery.startsWith("SELECT")) {
+    throw new Error("SQL query must start with SELECT");
+  }
+
+  // Query must not contain UPDATE, INSERT, DELETE, or PRAGMA statements
+  const invalidKeywords = ["UPDATE", "INSERT", "DELETE", "PRAGMA"];
+  if (invalidKeywords.some((keyword) => sqlQuery.includes(keyword))) {
+    throw new Error(
+      `SQL query must not contain ${invalidKeywords.join(", ")} statements`,
+    );
+  }
+
+  try {
+    return CompiledQuery.raw(sqlQuery);
+  } catch (error) {
+    throw new Error(`Invalid SQL query: ${sqlQuery}`, { cause: error });
+  }
 }

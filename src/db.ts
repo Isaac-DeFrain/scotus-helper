@@ -143,6 +143,21 @@ export function openDb(dbPath: string): Kysely<AppDatabase> {
 }
 
 /**
+ * Open a read-only SQLite connection. The file must already exist with schema
+ * applied; {@link DDL} is not executed because writes are disabled.
+ */
+export function openReadOnlyDb(dbPath: string): Kysely<AppDatabase> {
+  const sqlite = new BetterSqlite3(dbPath, {
+    readonly: true,
+    fileMustExist: true,
+  });
+
+  return new Kysely<AppDatabase>({
+    dialect: new SqliteDialect({ database: sqlite }),
+  });
+}
+
+/**
  * Query opinions from the database.
  *
  * All filter fields are optional and combinable.
