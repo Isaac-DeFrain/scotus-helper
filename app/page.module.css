@@ -79,6 +79,16 @@
 	margin-right: 2rem;
 }
 
+.messageError {
+	background: var(--error-bg);
+	border-color: var(--error-border);
+	margin-right: 2rem;
+}
+
+.messageError .messageBody {
+	color: var(--error-text);
+}
+
 .form {
 	display: flex;
 	gap: 0.5rem;

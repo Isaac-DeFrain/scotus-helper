@@ -9,6 +9,9 @@
 	--green: #16a34a;
 	--user: #dbeafe;
 	--assistant: #f1f5f9;
+	--error-bg: #fef2f2;
+	--error-border: #fecaca;
+	--error-text: #991b1b;
 }
 
 html,
