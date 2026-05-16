@@ -9,6 +9,7 @@ import {
 } from "react";
 import { v4 as uuidv4 } from "uuid";
 
+import { ChatMarkdown } from "./ChatMarkdown";
 import styles from "./page.module.css";
 import type { Source } from "@/src/libs/chat";
 import { base64JsonToSources } from "@/src/libs/utils";
@@ -171,7 +172,14 @@ export default function Home() {
                     ? "Error"
                     : "SCOTUS Helper"}
               </p>
-              <p className={styles.messageBody}>{message.content}</p>
+              {message.role === "assistant" && message.variant !== "error" ? (
+                <ChatMarkdown
+                  content={message.content}
+                  className={styles.markdownBody}
+                />
+              ) : (
+                <p className={styles.messageBody}>{message.content}</p>
+              )}
               {message.sources && message.sources.length > 0 && (
                 <div className={styles.sources}>
                   {message.sources.map((s) => (
