@@ -1,5 +1,5 @@
 {
-	description = "scotus-opinion-helper development shell";
+	description = "scotus-helper development shell";
 
 	inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
 
