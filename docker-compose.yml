@@ -40,6 +40,7 @@ services:
       - .env
     environment:
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "scrape-opinions", "--", "--all"]
@@ -62,6 +63,7 @@ services:
     environment:
       WEAVIATE_URL: http://weaviate:8080
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "upload-opinions"]
@@ -83,6 +85,7 @@ services:
     environment:
       WEAVIATE_URL: http://weaviate:8080
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
 
@@ -102,6 +105,7 @@ services:
     environment:
       WEAVIATE_URL: http://weaviate:8080
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
+      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
