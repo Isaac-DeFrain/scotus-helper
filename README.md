@@ -1,26 +1,52 @@
 # scotus-opinion-helper
 
-A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). On first launch it scrapes [merits](https://www.supremecourt.gov/opinions/slipopinion) and [orders](https://www.supremecourt.gov/opinions/relatingtoorders) listings, extracts full text from PDFs, chunks and embeds the content with OpenAI, and loads the vectors into [Weaviate](https://github.com/weaviate/weaviate) — then starts a Next.js chat UI backed by [`gpt-4o-mini`](https://platform.openai.com/docs/models/gpt-4o-mini) and [`gpt-4o`](https://platform.openai.com/docs/models/gpt-4o) that lets you ask questions across all indexed opinions. Responses include source citations linked to the original PDFs. A daily cron job keeps the corpus current.
+A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). Ask questions across indexed merits and orders opinions; get answers streamed from `gpt-4o` with source citations linked to the original PDFs. A daily cron job keeps the corpus current.
+
+## Architecture
+
+### Ingestion
+
+Opinions are scraped from the SCOTUS website, extracted from PDFs, and stored in SQLite. They are then chunked, embedded, and upserted into Weaviate on upload. This runs once on setup and daily via cron.
+
+```mermaid
+flowchart LR
+    A[SCOTUS website] --> B[scrape-opinions]
+    B --> C[(SQLite)]
+    C --> D[upload-opinions]
+    D --> E[OpenAI embeddings]
+    E --> F[(Weaviate)]
+```
+
+### Chat query flow
+
+Each user query passes through several stages before a response is streamed:
+
+1. **Selector** (`gpt-4o-mini`) — normalizes the query, checks whether it is on-topic, and picks a retrieval strategy: `sql`, `vector`, `both`, or `none`. Off-topic queries are rejected with `400`.
+2. **Retrieval** — runs as needed based on the selector's decision:
+   - **Vector**: embeds the query (`text-embedding-3-small`) and searches Weaviate for the most similar opinion chunks.
+   - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`).
+3. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
+4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations are returned in the `X-Sources` response header as a base64-encoded JSON array.
 
 ## Setup
 
-Use [Docker](#docker) or follow these steps:
+Follow these steps or see [Docker](#docker):
 
 1. Install dependencies
 
     ```shell
-    npm i
+    npm install
     ```
 
-2. Set up environment variables in `.env` (see `.env.example`).
+2. Set up environment variables in `.env` (see [`.env.example`](./.env.example)).
 
 3. Scrape opinions
 
     ```shell
-    npm run scrape-opinions -- --all
+    npm run scrape-opinions
     ```
 
-4. Start Weaviate
+4. Start Weaviate locally via Docker
 
     ```shell
     docker compose up -d weaviate
@@ -47,7 +73,7 @@ The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bri
 ### Running the full stack
 
 ```shell
-cp .env.example .env   # fill in OPENAI_API_KEY
+cp .env.example .env   # fill in OPENAI_API_KEY, COHERE_API_KEY
 make up
 ```
 
@@ -72,6 +98,8 @@ docker compose up -d cron
 
 ### Running scripts against the Dockerized stack
 
+Use the [Makefile](./Makefile)
+
 ```shell
 make scrape   # scrape opinions and store in SQLite
 make upload   # upload opinion chunks to Weaviate
@@ -86,7 +114,7 @@ make inspect  # inspect Weaviate health and collection counts
     | ---- | --------- |
     | _(none)_ | current term only |
     | `-- --all` | all terms from 2018 to present |
-    | `-- --term 24` | October Term 2024 only |
+    | `-- --term 24` or `-- --term 2024` | October Term 2024 only |
 
 2. `npm run upload-opinions` — for each opinion in SQLite, chunks the text and calls OpenAI (`text-embedding-3-small`) to generate embeddings, caching results in an `opinion_chunks` table so re-runs skip already-embedded opinions. Then batch-upserts all chunks as vectors into Weaviate (`SupremeCourtOpinions` collection, created automatically if absent).
 
@@ -106,7 +134,11 @@ npm test
 
 Normalizes the query, checks whether it is on-topic for U.S. Supreme Court opinions, and picks a retrieval strategy. Uses `gpt-4o-mini` (LangSmith-wrapped).
 
-Request: `{ query: string }`.
+Request shape:
+
+```ts
+{ query: string }
+```
 
 Response shape:
 
@@ -121,11 +153,43 @@ Response shape:
 
 ### `POST /api/sql-query-generator`
 
-Accepts `{ normalizedQuery: string }` and returns `{ sqlQuery: string; reason: string }` — a read-only `SELECT` for the SQLite opinions schema (`gpt-4o`, LangSmith-wrapped). Used by the chat flow when structured retrieval is needed.
+Takes a normalized user query (from the [selector](./src/libs/selector.ts)) and returns a read-only `SELECT` for the [SQLite schema](./src/db.ts) (`gpt-4o`, LangSmith-wrapped). Used by the chat flow when structured retrieval is needed.
+
+Request shape:
+
+```ts
+{ normalizedQuery: string }
+```
+
+Response shape:
+
+```ts
+{
+  sqlQuery: string;
+  reason: string;
+}
+```
 
 ### `POST /api/chat`
 
-Accepts `{ query: string }`. Runs the selector (`/api/selector` logic in-process), then as needed runs vector search in Weaviate and/or SQL against SQLite, and streams a response from `gpt-4o`. Off-topic queries are rejected with `400`. Source citations (case name, docket, PDF URL) are returned in the `X-Sources` response header as a JSON array.
+Runs the selector in-process, retrieves context via vector search and/or SQL as needed, reranks the results with Cohere, then streams a `gpt-4o` response. Off-topic queries are rejected with `400`. Source citations are returned in the `X-Sources` response header as a base64-encoded JSON array. See the [Architecture](#architecture) section for the full flow.
+
+Request shape:
+
+```ts
+{ query: string }
+```
+
+Response shape:
+
+```ts
+// Streaming plain-text body; X-Sources header contains base64-encoded JSON:
+Array<{
+  caseName: string;
+  docket?: string;
+  pdfUrl: string;
+}>
+```
 
 ## Tech stack
 
@@ -136,6 +200,7 @@ Accepts `{ query: string }`. Runs the selector (`/api/selector` logic in-process
 - **Embeddings**: OpenAI `text-embedding-3-small`
 - **Query routing**: OpenAI `gpt-4o-mini` (selector: normalize + topic filter + SQL/vector/both)
 - **Chat**: OpenAI `gpt-4o`
+- **Reranking**: Cohere `rerank-v3.5`
 - **Vector store**: Weaviate (local, via Docker)
 - **Validation**: Zod
 - **Observability**: LangSmith (optional tracing)
@@ -144,3 +209,10 @@ Accepts `{ query: string }`. Runs the selector (`/api/selector` logic in-process
 
 - Merits: `https://www.supremecourt.gov/opinions/slipopinion`
 - Orders: `https://www.supremecourt.gov/opinions/relatingtoorders`
+
+---
+
+### AI co-authors
+
+- [Claude Sonnet 4.6](https://www.anthropic.com/claude/sonnet)
+- [Cursor Composer 2](https://cursor.com/blog/composer-2)
