@@ -86,6 +86,7 @@ services:
       WEAVIATE_URL: http://weaviate:8080
       NPM_CONFIG_UPDATE_NOTIFIER: "false"
       NPM_CONFIG_TELEMETRY: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
     volumes:
       - ./data:/app/data
 
