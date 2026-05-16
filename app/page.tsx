@@ -213,7 +213,7 @@ export default function Home() {
             disabled={isStreaming || !input.trim()}
             className={[styles.button, styles.sendButton].join(" ")}
           >
-            {isStreaming ? "Sending..." : "Send"}
+            {isStreaming ? "Thinking..." : "Ask"}
           </button>
         </form>
       </div>

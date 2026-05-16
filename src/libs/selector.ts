@@ -38,8 +38,10 @@ Your task has three parts:
    - Rephrase it as a clear, concise question while preserving the original intent
 2. Determine whether the normalized query is about a U.S. Supreme Court opinion, ruling, case, justice, or related legal topic.
    - When a user asks about "cases", this means Supreme Court cases.
+   - When a user asks about "opinions", this means Supreme Court opinions.
+   - When a user asks about A v. B, this means the Supreme Court case named A v. B.
 3. If the query is on topic, decide which retrieval strategy is needed to answer it, given these data sources:
-   - A SQL database with structured opinion metadata (case name, docket number, term year, decision date, opinion type, URL, full text).
+   - A SQL database with structured opinions, chunks, and metadata (case name, docket number, term year, decision date, opinion type, URL, full text).
    - A vector store with semantically-indexed opinion text chunks for similarity search.
 
    Retrieval strategies:
@@ -50,13 +52,22 @@ Your task has three parts:
 
 Here are some examples of queries and the appropriate retrieval strategy:
 - "How many opinions were decided in 2023?": "sql"
+- "What is the most recent opinion?": "sql"
+- "When was Trump v. Illinois decided?": "sql"
+- "Summarize the opinion in the case of Brakebill v. Jaeger": "sql"
+
 - "What did the Court say about religious liberty?": "vector"
+- "What does Clarence Thomas think about the death penalty?": "vector"
+- "How many Supreme Court justices are there?": "vector"
+
 - "Which justices dissented from the majority opinion in the case of Doe v. Smith?": "both"
 - "What is the most recent opinion on abortion?": "both"
 - "How many cases has a U.S. attorney general brought before the Supreme Court?": "both"
 - "How many cases has a U.S. president brought before the Supreme Court?": "both"
+
 - "What is the weather in Tokyo?": "none"
 - "How to bake a cake?": "none"
+- "Where is Waldo?": "none"
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {

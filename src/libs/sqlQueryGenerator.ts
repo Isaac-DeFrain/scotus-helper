@@ -35,11 +35,13 @@ ${DDL}
 
 To answer the user's question, generate a valid SQL query against the above database schema.
 
-Whenever rows represent one or more opinions or opinion chunks, include \`case_name\` in the SELECT list (use table qualifiers if needed) so each result row identifies the case.
-
 The query must ONLY ever read data from the database, i.e. it should ONLY ever be a SELECT statement.
 
 If the question is about a specific date, make sure to use the \`date\` field (in seconds since Unix epoch) to filter the results.
+
+If asked to summarize a case, SELECT the \`text\` field from the opinion table.
+
+ALWAYS include the \`case_name\` field in the SELECT list.
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {
