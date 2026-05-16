@@ -88,25 +88,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Combine dockets from vector and SQL search
-    const chunkDockets = chunks
-      .map((c) => c.docket)
-      .filter(Boolean) as string[];
-    const sqlDockets = sqlRows
-      .map((r) => r.docket)
-      .filter((d): d is string => typeof d === "string");
-    const dockets = [...new Set([...chunkDockets, ...sqlDockets])];
-
-    // Fetch the sources from the SQLite database
-    const sources = await getSources(dockets);
+    // Fetch the sources from the SQLite database and build the context
+    const sources = await getSources(chunks, sqlRows);
     const vectorContext = buildContext(chunks);
     const sqlContext =
       sqlRows.length > 0
         ? `<SQL_RESULTS>\n${JSON.stringify(sqlRows, null, 2)}\n</SQL_RESULTS>`
         : "";
     const context = [vectorContext, sqlContext].filter(Boolean).join("\n\n");
-    const encoder = new TextEncoder();
 
+    // Stream the response
     const stream = await openai.chat.completions.create({
       model: CHAT_MODEL,
       stream: true,
@@ -114,19 +105,23 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "system",
-          content: `You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
-Use ONLY the provided sources and SQL results when answering. When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
+          content: `Use ONLY the provided sources when answering the user's question and provide your reasoning.
+
+You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
+
+When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
         },
         {
           role: "user",
           content: `${normalizedQuery}
 
-Sources and SQL results:
+Sources:
 ${context}`,
         },
       ],
     });
 
+    const encoder = new TextEncoder();
     return new NextResponse(
       new ReadableStream<Uint8Array>({
         async start(controller) {

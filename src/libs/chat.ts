@@ -8,7 +8,7 @@ import { formatDate } from "./utils";
  */
 export type Source = {
   caseName: string;
-  docket: string;
+  docket?: string;
   pdfUrl: string;
 };
 
@@ -45,15 +45,26 @@ export function buildContext(chunks: OpinionChunk[]): string {
  * @param dockets - The dockets to fetch the sources for
  * @returns The sources
  */
-export async function getSources(dockets: string[]): Promise<Source[]> {
+export async function getSources(
+  chunks: OpinionChunk[],
+  sqlRows: Record<string, unknown>[],
+): Promise<Source[]> {
+  const chunkCaseNames = chunks
+    .map((c) => c.caseName)
+    .filter(Boolean) as string[];
+  const sqlCaseNames = sqlRows
+    .map((r) => r.case_name)
+    .filter(Boolean) as string[];
+  const caseNames = [...new Set([...chunkCaseNames, ...sqlCaseNames])];
+
   let sources: Source[] = [];
-  if (dockets.length > 0) {
+  if (caseNames.length > 0) {
     const db = openDb(DB_PATH);
     try {
       const rows = await db
         .selectFrom("opinions")
         .select(["docket", "case_name", "pdf_url"])
-        .where("docket", "in", dockets)
+        .where("case_name", "in", caseNames)
         .execute();
 
       sources = rows.map((r) => ({

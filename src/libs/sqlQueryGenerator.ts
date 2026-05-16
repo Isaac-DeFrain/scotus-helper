@@ -35,7 +35,9 @@ ${DDL}
 
 To answer the user's question, generate a valid SQL query against the above database schema.
 
-The query should ONLY ever read data from the database, i.e. it should ONLY ever be a SELECT statement.
+Whenever rows represent one or more opinions or opinion chunks, include \`case_name\` in the SELECT list (use table qualifiers if needed) so each result row identifies the case.
+
+The query must ONLY ever read data from the database, i.e. it should ONLY ever be a SELECT statement.
 
 If the question is about a specific date, make sure to use the \`date\` field (in seconds since Unix epoch) to filter the results.
 
