@@ -39,5 +39,6 @@ export async function rerank(
     topN: RERANK_TOP_N,
   });
 
+  console.log("Rerank results:", JSON.stringify(response.results, null, 2));
   return response.results.map((r) => documents[r.index]);
 }
