@@ -19,6 +19,7 @@ import {
 } from "@/src/libs/sqlQueryGenerator";
 import { buildContext, getSources } from "@/src/libs/chat";
 import { openaiClient } from "@/src/libs/openai";
+import { rerank } from "@/src/libs/cohereRerank";
 
 const CHAT_MODEL = "gpt-4o";
 
@@ -30,7 +31,7 @@ const CHAT_MODEL = "gpt-4o";
  * search as needed, then streams a GPT-4o answer with source metadata in the
  * `X-Sources` response header.
  *
- * @param req - `{ query: string }` — the raw user question
+ * @param req - {@link selectorRequestSchema} - the raw user question
  * @returns A streaming plain-text response, or a JSON error on bad input
  */
 export async function POST(req: NextRequest) {
@@ -89,13 +90,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch the sources from the SQLite database and build the context
-    const sources = await getSources(chunks, sqlRows);
+    const sources = await getSources(
+      chunks,
+      sqlRows as Extract<typeof sqlRows, { case_name: string }>[],
+    );
     const vectorContext = buildContext(chunks);
     const sqlContext =
       sqlRows.length > 0
         ? `<SQL_RESULTS>\n${JSON.stringify(sqlRows, null, 2)}\n</SQL_RESULTS>`
         : "";
-    const context = [vectorContext, sqlContext].filter(Boolean).join("\n\n");
+    const documents = [vectorContext, sqlContext].filter(Boolean);
+    const context = await rerank(normalizedQuery, documents);
 
     // Stream the response
     const stream = await openai.chat.completions.create({

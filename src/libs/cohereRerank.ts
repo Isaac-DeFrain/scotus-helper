@@ -7,8 +7,6 @@
 
 import { CohereClientV2 } from "cohere-ai";
 
-import { OpinionChunk } from "@/src/libs/opinionUtils";
-
 const RERANK_MODEL = "rerank-v3.5";
 const RERANK_TOP_N = 10;
 
@@ -20,22 +18,26 @@ const RERANK_TOP_N = 10;
  * @param chunks - Candidate chunks retrieved from vector search
  * @returns Top-N chunks ordered by Cohere relevance score
  */
-export async function rerankChunks(
+export async function rerank(
   query: string,
-  chunks: OpinionChunk[],
-): Promise<OpinionChunk[]> {
-  if (chunks.length === 0) return chunks;
+  documents: string[],
+): Promise<string[]> {
+  if (documents.length === 0) return documents;
+
+  const cohereApiKey = process.env.COHERE_API_KEY?.trim();
+  if (!cohereApiKey) {
+    throw new Error("COHERE_API_KEY is not set");
+  }
 
   const cohere = new CohereClientV2({
-    token: process.env.COHERE_API_KEY!.trim(),
+    token: cohereApiKey,
   });
-
   const response = await cohere.rerank({
     model: RERANK_MODEL,
     query,
-    documents: chunks.map((c) => c.text),
+    documents,
     topN: RERANK_TOP_N,
   });
 
-  return response.results.map((r) => chunks[r.index]);
+  return response.results.map((r) => documents[r.index]);
 }

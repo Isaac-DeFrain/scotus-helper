@@ -1,5 +1,5 @@
 import { DB_PATH } from "../constants";
-import { openDb } from "../db";
+import { openReadOnlyDb } from "../db";
 import { OpinionChunk } from "./opinionUtils";
 import { formatDate } from "./utils";
 
@@ -45,10 +45,10 @@ export function buildContext(chunks: OpinionChunk[]): string {
  * @param dockets - The dockets to fetch the sources for
  * @returns The sources
  */
-export async function getSources(
-  chunks: OpinionChunk[],
-  sqlRows: Record<string, unknown>[],
-): Promise<Source[]> {
+export async function getSources<
+  T extends { caseName: string },
+  R extends { case_name: string },
+>(chunks: T[], sqlRows: R[]): Promise<Source[]> {
   const chunkCaseNames = chunks
     .map((c) => c.caseName)
     .filter(Boolean) as string[];
@@ -59,7 +59,7 @@ export async function getSources(
 
   let sources: Source[] = [];
   if (caseNames.length > 0) {
-    const db = openDb(DB_PATH);
+    const db = openReadOnlyDb(DB_PATH);
     try {
       const rows = await db
         .selectFrom("opinions")
