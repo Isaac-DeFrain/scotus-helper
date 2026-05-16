@@ -377,11 +377,31 @@ async function uploadOpinions(): Promise<void> {
 
       const lastUploadTime = await lastUploadTimeSec(collection);
       const totalToUpload = totalChunks - weaviateCount;
+      const isTTY = Boolean(process.stdout.isTTY);
 
       let successCount = 0;
       let errorCount = 0;
       let batchNum = 0;
       let progressBatches = 0;
+      let lastLoggedPct = -1;
+
+      const logProgress = (done: number): void => {
+        const line = formatWeaviateUploadProgress(done, totalToUpload);
+
+        if (isTTY) {
+          process.stdout.write(`\r${line}`);
+          return;
+        }
+
+        const pct =
+          totalToUpload === 0 ? 100 : Math.round((100 * done) / totalToUpload);
+        const milestone = Math.floor(pct / 10) * 10;
+
+        if (milestone > lastLoggedPct) {
+          console.log(line);
+          lastLoggedPct = milestone;
+        }
+      };
 
       for await (const page of streamChunksFromDb(
         db,
@@ -412,7 +432,7 @@ async function uploadOpinions(): Promise<void> {
 
           if (batchResult.hasErrors) {
             errors.push(...Object.values(batchResult.errors));
-            process.stdout.write("\n");
+            if (isTTY) process.stdout.write("\n");
             console.warn(
               `  Batch ${batchNum} failed:`,
               errors.map((e) => e.message).join(", "),
@@ -422,17 +442,15 @@ async function uploadOpinions(): Promise<void> {
           successCount += page.length - errors.length;
         } catch (err) {
           errorCount += page.length;
-          process.stdout.write("\n");
+          if (isTTY) process.stdout.write("\n");
           console.warn(`  Batch ${batchNum} failed:`, (err as Error).message);
         }
 
-        process.stdout.write(
-          `\r${formatWeaviateUploadProgress(successCount, totalToUpload)}`,
-        );
+        logProgress(successCount);
         progressBatches += 1;
       }
 
-      if (progressBatches > 0) {
+      if (progressBatches > 0 && isTTY) {
         process.stdout.write("\n");
       }
 
