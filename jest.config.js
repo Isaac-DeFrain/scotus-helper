@@ -1,5 +1,5 @@
 /** @type {import('jest').Config} */
-export default {
+const jestConfig = {
     testEnvironment: "node",
     transform: {
         "^.+\\.tsx?$": [
@@ -15,3 +15,5 @@ export default {
         ],
     },
 };
+
+export default jestConfig;

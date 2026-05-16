@@ -1,5 +1,5 @@
 {
-  "name": "scotus-opinion-helper",
+  "name": "scotus-helper",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -38,19 +38,18 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "eslint": "^10.3.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.18",
     "jest": "^30.3.0",
     "ts-jest": "^29.4.9",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.2"
+    "typescript": "^6.0.3"
   },
   "overrides": {
     "postcss": "^8.5.10",
