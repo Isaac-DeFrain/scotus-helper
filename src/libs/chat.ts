@@ -30,13 +30,31 @@ ${chunk.text}
 }
 
 /**
- * Builds the context for the chat agent
+ * Builds the vector context for the chat agent
  *
  * @param chunks - The chunks to build the context from
  * @returns The context
  */
-export function buildContext(chunks: OpinionChunk[]): string {
+export function buildVectorContext(chunks: OpinionChunk[]): string {
   return chunks.map(formatSourceHeader).join("\n\n");
+}
+
+/**
+ * Builds the SQL context for the chat agent
+ *
+ * @param sqlRows - The SQL rows to build the context from
+ * @returns The context
+ */
+export function buildSqlContext(sqlRows: Record<string, unknown>[]): string {
+  const rows = sqlRows.map((r) =>
+    Object.fromEntries(
+      Object.entries(r).map(([k, v]) => [
+        k,
+        /date/i.test(k) && typeof v === "number" ? formatDate(v) : v,
+      ]),
+    ),
+  );
+  return `<SQL_RESULTS>\n${JSON.stringify(rows, null, 2)}\n</SQL_RESULTS>`;
 }
 
 /**

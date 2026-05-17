@@ -17,7 +17,11 @@ import {
   runSqlQueryGenerator,
   validateAndParseSqlQuery,
 } from "@/src/libs/sqlQueryGenerator";
-import { buildContext, getSources } from "@/src/libs/chat";
+import {
+  buildVectorContext,
+  buildSqlContext,
+  getSources,
+} from "@/src/libs/chat";
 import { openaiClient } from "@/src/libs/openai";
 import { rerank } from "@/src/libs/cohereRerank";
 
@@ -94,13 +98,13 @@ export async function POST(req: NextRequest) {
       chunks,
       sqlRows as Extract<typeof sqlRows, { case_name: string }>[],
     );
-    const vectorContext = buildContext(chunks);
-    const sqlContext =
-      sqlRows.length > 0
-        ? `<SQL_RESULTS>\n${JSON.stringify(sqlRows, null, 2)}\n</SQL_RESULTS>`
-        : "";
-    const documents = [vectorContext, sqlContext].filter(Boolean);
-    const context = await rerank(normalizedQuery, documents);
+
+    const vectorContext = buildVectorContext(chunks);
+    const sqlContext = buildSqlContext(sqlRows);
+    const context = await rerank(
+      normalizedQuery,
+      [vectorContext, sqlContext].filter(Boolean),
+    );
 
     // Stream the response
     const stream = await openai.chat.completions.create({
