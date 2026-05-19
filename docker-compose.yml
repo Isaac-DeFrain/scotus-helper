@@ -1,4 +1,10 @@
+x-common-env: &common-env
+  NPM_CONFIG_UPDATE_NOTIFIER: "false"
+  NPM_CONFIG_TELEMETRY: "false"
+  NEXT_TELEMETRY_DISABLED: "1"
+
 services:
+  # The Weaviate vector database.
   weaviate:
     command:
       - --host
@@ -14,9 +20,6 @@ services:
     volumes:
       - weaviate_data:/var/lib/weaviate
     restart: unless-stopped
-    depends_on:
-      scrape:
-        condition: service_completed_successfully
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
@@ -29,6 +32,7 @@ services:
       retries: 10
       start_period: 10s
 
+  # The service that scrapes the SCOTUS website and uploads the opinions to Weaviate.
   scrape:
     build:
       context: .
@@ -39,13 +43,13 @@ services:
     env_file:
       - .env
     environment:
-      NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      NPM_CONFIG_TELEMETRY: "false"
+      <<: *common-env
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "scrape-opinions", "--", "--all"]
     restart: "no"
 
+  # The service that uploads the opinions to Weaviate.
   upload:
     build:
       context: .
@@ -61,14 +65,14 @@ services:
     env_file:
       - .env
     environment:
+      <<: *common-env
       WEAVIATE_URL: http://weaviate:8080
-      NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "upload-opinions"]
     restart: "no"
 
+  # The web application.
   app:
     build:
       context: .
@@ -83,13 +87,13 @@ services:
     env_file:
       - .env
     environment:
+      <<: *common-env
       WEAVIATE_URL: http://weaviate:8080
-      NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      NPM_CONFIG_TELEMETRY: "false"
-      NEXT_TELEMETRY_DISABLED: "1"
+    restart: unless-stopped
     volumes:
       - ./data:/app/data
 
+  # The service that runs the cron jobs.
   cron:
     build:
       context: .
@@ -104,12 +108,12 @@ services:
     env_file:
       - .env
     environment:
+      <<: *common-env
       WEAVIATE_URL: http://weaviate:8080
-      NPM_CONFIG_UPDATE_NOTIFIER: "false"
-      NPM_CONFIG_TELEMETRY: "false"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
 
+# The volume that stores the Weaviate data.
 volumes:
   weaviate_data:

@@ -1,0 +1,30 @@
+services:
+  # Remove the exposed port from app — nginx handles ingress
+  app:
+    ports: !reset []
+    restart: always
+
+  # Remove exposed weaviate ports too (not needed externally in prod)
+  weaviate:
+    ports: !reset []
+    restart: always
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
+
+  cron:
+    restart: always
+
+  # The reverse proxy - the main entrypoint into the application. Holds the TLS
+  # certificates.
+  nginx:
+    image: nginx:1.31-alpine
+    volumes:
+      - ./nginx/prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro # TLS certs
+    ports:
+      - 80:80
+      - 443:443
+    depends_on:
+      app:
+        condition: service_started
+    restart: always
