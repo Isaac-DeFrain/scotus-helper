@@ -20,6 +20,9 @@ services:
     volumes:
       - weaviate_data:/var/lib/weaviate
     restart: unless-stopped
+    depends_on:
+      scrape:
+        condition: service_completed_successfully
     environment:
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
       PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
@@ -47,7 +50,7 @@ services:
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "scrape-opinions", "--", "--all"]
-    restart: "no"
+    restart: on-failure
 
   # The service that uploads the opinions to Weaviate.
   upload:
@@ -70,7 +73,7 @@ services:
     volumes:
       - ./data:/app/data
     entrypoint: ["npm", "run", "upload-opinions"]
-    restart: "no"
+    restart: on-failure
 
   # The web application.
   app:
