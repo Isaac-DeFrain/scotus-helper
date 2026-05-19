@@ -1,19 +1,50 @@
-node_modules
-npm-debug.log
-
-.next/
-*.tsbuildinfo
-
-.git
-.github
-
 data
 
+# Dev tools
+.git
+.github
+.editorconfig
+.gitattributes
+.gitignore
+.node-version
+flake.nix
+flake.lock
+.vscode
+.cursor
+.direnv
+.envrc
+Makefile
+eslint.config.mjs
+
+# node
+node_modules
+npm-debug.log*
 coverage
 dist
 .cache
 
-.env
+# TypeScript
+tsconfig.tsbuildinfo
 
-flake.nix
-flake.lock
+# Docker files
+.dockerignore*
+Dockerfile*
+docker-compose*.yml
+
+# Test files
+**/*.test.ts
+**/*.spec.ts
+jest.config.js
+
+# Secrets
+.env
+.env.*
+!.env.example
+nginx/certs
+
+# Docs / misc
+*.md
+LICENSE
+example-questions.txt
+styles.d.ts
+next-env.d.ts
