@@ -10,6 +10,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import { ChatMarkdown } from "./ChatMarkdown";
+import { DonateButtons } from "./DonateButtons";
 import styles from "./page.module.css";
 import type { Source } from "@/src/libs/chat";
 import { base64JsonToSources } from "@/src/libs/utils";
@@ -225,6 +226,7 @@ export default function Home() {
           </button>
         </form>
       </div>
+      <DonateButtons />
     </div>
   );
 }
