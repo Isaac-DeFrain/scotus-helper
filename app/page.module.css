@@ -13,6 +13,13 @@
 	line-height: 2.25rem;
 	font-weight: 700;
 	margin: 0 0 2rem;
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+}
+
+.titleIcon {
+	flex-shrink: 0;
 }
 
 .panel {
