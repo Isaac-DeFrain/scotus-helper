@@ -80,8 +80,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - 3000:3000
     depends_on:
       weaviate:
         condition: service_healthy
@@ -115,6 +113,19 @@ services:
       WEAVIATE_URL: http://weaviate:8080
     volumes:
       - ./data:/app/data
+    restart: unless-stopped
+
+  # The reverse proxy - sole HTTP entrypoint in dev.
+  nginx:
+    image: nginx:1.31-alpine
+    volumes:
+      - ./nginx/dev.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/entrypoint.d:/docker-entrypoint.d/custom:ro
+    ports:
+      - 80:80
+    depends_on:
+      app:
+        condition: service_started
     restart: unless-stopped
 
 # The volume that stores the Weaviate data.
