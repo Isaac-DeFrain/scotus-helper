@@ -270,12 +270,17 @@
 	border-color: var(--green);
 }
 
+.footerBar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 1rem;
+}
+
 .donateBar {
 	display: flex;
 	align-items: center;
 	gap: 0.5rem;
-	margin-top: 1rem;
-	justify-content: center;
 }
 
 .donateLabel {
@@ -289,4 +294,5 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	text-decoration: none;
 }

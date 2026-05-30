@@ -16,6 +16,8 @@ import styles from "./page.module.css";
 import type { Source } from "@/src/libs/chat";
 import { base64JsonToSources } from "@/src/libs/utils";
 
+const GITHUB_REPO_URL = "https://github.com/Isaac-DeFrain/scotus-helper";
+
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -236,7 +238,18 @@ export default function Home() {
           </button>
         </form>
       </div>
-      <DonateButtons />
+      <div className={styles.footerBar}>
+        <a
+          href={GITHUB_REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.githubLink}
+          aria-label="View source on GitHub"
+        >
+          <Image src="/github.svg" alt="" width={20} height={20} />
+        </a>
+        <DonateButtons />
+      </div>
     </div>
   );
 }

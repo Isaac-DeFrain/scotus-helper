@@ -36,9 +36,7 @@ export function DonateButtons() {
 
   return (
     <div className={styles.donateBar}>
-      <span className={styles.donateLabel}>
-        Please consider supporting this work:
-      </span>
+      <span className={styles.donateLabel}>Support this work:</span>
       {button("btc", BTC_ADDRESS)}
       {button("eth", ETH_ADDRESS)}
     </div>
