@@ -209,8 +209,12 @@ Array<{
 
 ## Data sources
 
-- Merits: `https://www.supremecourt.gov/opinions/slipopinion`
-- Orders: `https://www.supremecourt.gov/opinions/relatingtoorders`
+- Merits: <https://www.supremecourt.gov/opinions/slipopinion>
+- Orders: <https://www.supremecourt.gov/opinions/relatingtoorders>
+
+## Demo video
+
+<https://cap.link/sw50negmy1wkct6>
 
 ---
 
@@ -218,3 +222,4 @@ Array<{
 
 - [Claude Sonnet 4.6](https://www.anthropic.com/claude/sonnet)
 - [Cursor Composer 2](https://cursor.com/blog/composer-2)
+- [Cursor Composer 2.5](https://cursor.com/blog/composer-2-5)
