@@ -1,6 +1,6 @@
 # scotus-helper
 
-[![Deploy](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/build-and-deploy.yml)
+[![Deploy](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/deploy.yml/badge.svg)](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/deploy.yml)
 
 A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). Ask questions across indexed merits and orders opinions; get answers streamed from `gpt-4o` with source citations linked to the original PDFs. A daily cron job keeps the corpus current.
 
