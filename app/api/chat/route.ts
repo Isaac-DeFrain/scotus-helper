@@ -122,10 +122,7 @@ When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", 
         },
         {
           role: "user",
-          content: `${normalizedQuery}
-
-Sources:
-${context}`,
+          content: userPrompt(normalizedQuery, context),
         },
       ],
     });
@@ -162,4 +159,13 @@ ${context}`,
       { status: 500 },
     );
   }
+}
+
+function userPrompt(normalizedQuery: string, context: string[]): string {
+  return `
+  ${normalizedQuery}
+
+  Sources:
+  ${context}
+  `;
 }
