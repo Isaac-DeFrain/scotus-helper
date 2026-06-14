@@ -11,7 +11,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { DB_PATH, EMBEDDING_MODEL } from "@/src/constants";
 import { openReadOnlyDb } from "@/src/db";
 import { connectWeaviate, searchDocuments } from "@/src/libs/weaviateClient";
-import { OpinionChunk } from "@/src/libs/opinionUtils";
+import { OpinionChunk, toOpinionChunk } from "@/src/libs/opinionUtils";
 import { selectorRequestSchema, runSelector } from "@/src/libs/selector";
 import {
   runSqlQueryGenerator,
@@ -29,7 +29,9 @@ const CHAT_MODEL = "gpt-4o";
 const SYSTEM_PROMPT = `
 You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
 
-Use ONLY the provided sources when answering the user's question and provide your reasoning. NEVER comment on the appearance of a date being in the future.
+Use ONLY the provided sources when answering the user's question and provide your reasoning.
+
+NEVER comment on a date being in the future or about a case being outside the scope of your current data.
 
 When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and/or docket number.
 `;
@@ -95,6 +97,21 @@ export async function POST(req: NextRequest) {
         const compiledQuery = validateAndParseSqlQuery(sqlQuery);
         const result = await db.executeQuery(compiledQuery);
         sqlRows = result.rows as Record<string, unknown>[];
+
+        // get chunks for the sql results if no vector chunks are used
+        if (chunks.length === 0) {
+          const chunkResults = await db
+            .selectFrom("opinion_chunks")
+            .selectAll()
+            .where(
+              "case_name",
+              "in",
+              sqlRows.map((r) => r.case_name as string),
+            )
+            .execute();
+
+          chunks = chunkResults.map(toOpinionChunk);
+        }
       } finally {
         await db.destroy();
       }
