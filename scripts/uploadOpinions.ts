@@ -45,7 +45,7 @@ import {
   WEAVIATE_COLLECTION_NAME,
 } from "@/src/constants";
 import { delay } from "@/src/libs/utils";
-import { OpinionChunk } from "@/src/libs/opinionUtils";
+import { OpinionChunk, toOpinionChunk } from "@/src/libs/opinionUtils";
 
 dotenv.config();
 
@@ -412,17 +412,7 @@ async function uploadOpinions(): Promise<void> {
         batchNum += 1;
 
         const objects = page.map((row) => ({
-          properties: {
-            text: row.content,
-            docket: row.docket,
-            caseName: row.case_name,
-            opinionType: row.opinion_type,
-            date: row.date,
-            justice: row.justice,
-            termYear: row.term_year,
-            chunkIndex: row.chunk_index,
-            totalChunks: row.total_chunks,
-          },
+          properties: toOpinionChunk(row),
           vectors: row.embedding,
         }));
 

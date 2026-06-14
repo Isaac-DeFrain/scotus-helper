@@ -28,24 +28,28 @@ export interface OpinionsTable {
   created_at: ColumnType<number, number | undefined, never>;
 }
 
-/**
- * Opinion chunks table schema — caches chunked text and embeddings so the
- * OpenAI API is only called once per chunk across multiple upload runs.
- */
-export interface OpinionChunksTable {
-  id: Generated<number>;
+/** Snake_case row shape from the `opinion_chunks` SQLite table. */
+export type SqlOpinionChunkRow = {
   docket: string;
   chunk_index: number;
   total_chunks: number;
   content: string;
-  embedding: string; // JSON-serialized number[]
-  start_char: number;
-  end_char: number;
   case_name: string;
   opinion_type: string;
   date: number;
   justice: string;
   term_year: number;
+};
+
+/**
+ * Opinion chunks table schema — caches chunked text and embeddings so the
+ * OpenAI API is only called once per chunk across multiple upload runs.
+ */
+export interface OpinionChunksTable extends SqlOpinionChunkRow {
+  id: Generated<number>;
+  embedding: string; // JSON-serialized number[]
+  start_char: number;
+  end_char: number;
   created_at: ColumnType<number, number | undefined, never>;
 }
 

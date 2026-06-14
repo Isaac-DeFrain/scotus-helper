@@ -2,6 +2,8 @@
  * Opinion metadata utilities
  */
 
+import { SqlOpinionChunkRow } from "../db";
+
 export type OpinionType = "merits" | "orders";
 
 export type OpinionMetaData = {
@@ -31,6 +33,24 @@ export type OpinionChunk = {
   chunkIndex: number;
   totalChunks: number;
 };
+
+/**
+ * Maps a cached SQLite opinion chunk row to the {@link OpinionChunk} shape
+ * used by Weaviate search results and chat context builders.
+ */
+export function toOpinionChunk(row: SqlOpinionChunkRow): OpinionChunk {
+  return {
+    text: row.content,
+    docket: row.docket,
+    caseName: row.case_name,
+    opinionType: row.opinion_type,
+    date: row.date,
+    justice: row.justice,
+    termYear: row.term_year,
+    chunkIndex: row.chunk_index,
+    totalChunks: row.total_chunks,
+  };
+}
 
 /**
  * Build the backup JSON filename for an opinion.
