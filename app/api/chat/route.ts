@@ -26,6 +26,13 @@ import { openaiClient } from "@/src/libs/openai";
 import { rerank } from "@/src/libs/cohereRerank";
 
 const CHAT_MODEL = "gpt-4o";
+const SYSTEM_PROMPT = `
+You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
+
+Use ONLY the provided sources when answering the user's question and provide your reasoning. NEVER comment on the appearance of a date being in the future.
+
+When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and/or docket number.
+`;
 
 /**
  * Chat endpoint
@@ -114,11 +121,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "system",
-          content: `Use ONLY the provided sources when answering the user's question and provide your reasoning.
-
-You are a careful legal research assistant with the goal of helping users find and understand information about U.S. Supreme Court opinions.
-
-When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and docket number. If the sources are insufficient, say what is missing.`,
+          content: SYSTEM_PROMPT,
         },
         {
           role: "user",
