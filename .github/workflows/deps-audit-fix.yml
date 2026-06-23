@@ -31,7 +31,7 @@ jobs:
       - name: Apply semver-safe audit fixes
         run: npm audit fix
 
-      - name: Verify audit is clean
+      - name: Verify clean audit
         run: npm audit --audit-level=moderate
 
       - name: Test
