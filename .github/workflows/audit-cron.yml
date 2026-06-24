@@ -1,4 +1,4 @@
-name: Daily dependency audit fix
+name: Daily npm audit fix
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  audit-fix:
+  audit-cron:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
