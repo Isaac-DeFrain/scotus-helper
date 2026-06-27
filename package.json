@@ -10,8 +10,6 @@
     "check": "npx tsc",
     "lint": "eslint .",
     "test": "jest",
-    "test:db": "jest src/db.test.ts",
-    "test:utils": "jest src/libs/opinionUtils.test.ts",
     "scrape-opinions": "tsx scripts/scrape/opinions.ts",
     "upload-opinions": "tsx scripts/uploadOpinions.ts",
     "inspect-weaviate": "tsx scripts/inspectWeaviate.ts"

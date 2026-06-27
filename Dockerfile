@@ -10,9 +10,12 @@ RUN npm ci
 # ---- builder ----
 FROM node:22-alpine AS builder
 
+ARG GIT_COMMIT=unknown
+
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV GIT_COMMIT=$GIT_COMMIT
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
