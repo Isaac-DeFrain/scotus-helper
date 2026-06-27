@@ -111,6 +111,13 @@ export async function POST(req: NextRequest) {
             .execute();
 
           chunks = chunkResults.map(toOpinionChunk);
+
+          if (sqlRows.length > 0 && "text" in sqlRows[0]) {
+            sqlRows = sqlRows.map((r) => {
+              delete r.text;
+              return r;
+            });
+          }
         }
       } finally {
         await db.destroy();
@@ -186,6 +193,6 @@ function userPrompt(normalizedQuery: string, context: string[]): string {
   ${normalizedQuery}
 
   Sources:
-  ${context}
+  ${context.join("\n\n")}
   `;
 }
