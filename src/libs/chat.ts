@@ -95,6 +95,5 @@ export async function getSources<
     }
   }
 
-  console.log("Sources:", JSON.stringify(sources, null, 2));
   return sources;
 }
