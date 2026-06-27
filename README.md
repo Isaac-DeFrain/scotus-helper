@@ -10,25 +10,53 @@ A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://
 
 ### Ingestion
 
-Opinions are scraped from the SCOTUS website, extracted from PDFs, and stored in SQLite. They are then chunked, embedded, and upserted into Weaviate on upload. This runs once on setup and daily via cron.
+Opinions are scraped from the SCOTUS website, extracted from PDFs, and stored in SQLite (`opinions`). `upload-opinions` chunks each opinion, embeds via OpenAI, caches chunks and vectors in SQLite (`opinion_chunks`), then upserts them into Weaviate. This runs once on setup and daily via cron.
 
 ```mermaid
 flowchart LR
     A[SCOTUS website] --> B[scrape-opinions]
-    B --> C[(SQLite)]
-    C --> D[upload-opinions]
-    D --> E[OpenAI embeddings]
-    E --> F[(Weaviate)]
+    B --> OP[(SQLite: opinions)]
+
+    subgraph upload [upload-opinions]
+        CH[chunk text]
+        EM[OpenAI embeddings]
+        CH --> EM
+        EM --> OC[(SQLite: opinion_chunks)]
+        OC --> WV[(Weaviate)]
+    end
+
+    OP --> CH
 ```
 
 ### Chat query flow
 
 Each user query passes through several stages before a response is streamed:
 
+```mermaid
+flowchart LR
+    U[User query] --> S[Selector<br/>(gpt-4o-mini)]
+    S -->|off-topic| ERR[400 error]
+    S -->|on-topic| R{Retrieval strategy}
+
+    R -->|vector / both| V[Embed query]
+    V --> WV[(Weaviate)]
+    WV --> CTX[Context]
+
+    R -->|sql / both| SQ[SQL generator<br/>(gpt-4o)]
+    SQ --> OP[(SQLite: opinions)]
+    OP --> CTX
+    SQ -.->|fallback chunks| OC[(SQLite: opinion_chunks)]
+    OC --> CTX
+
+    CTX --> RR[Cohere rerank]
+    RR --> GPT[gpt-4o stream]
+    GPT --> OUT[Response + X-Sources]
+```
+
 1. **Selector** (`gpt-4o-mini`) — normalizes the query, checks whether it is on-topic, and picks a retrieval strategy: `sql`, `vector`, `both`, or `none`. Off-topic queries are rejected with `400`.
 2. **Retrieval** — runs as needed based on the selector's decision:
    - **Vector**: embeds the query (`text-embedding-3-small`) and searches Weaviate for the most similar opinion chunks.
-   - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`).
+   - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`). When no vector chunks were retrieved, matching rows are loaded from `opinion_chunks` by case name.
 3. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
 4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations are returned in the `X-Sources` response header as a base64-encoded JSON array.
 
