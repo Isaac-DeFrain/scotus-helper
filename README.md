@@ -1,5 +1,7 @@
 # scotus-helper
 
+[![CI](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/ci.yml)
+[![Release](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/release.yml/badge.svg)](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/release.yml)
 [![Deploy](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/deploy.yml/badge.svg)](https://github.com/Isaac-DeFrain/scotus-helper/actions/workflows/deploy.yml)
 
 A RAG-powered chat app for exploring [U.S. Supreme Court slip opinions](https://www.supremecourt.gov/opinions/opinions.aspx). Ask questions across indexed merits and orders opinions; get answers streamed from `gpt-4o` with source citations linked to the original PDFs. A daily cron job keeps the corpus current.
@@ -71,6 +73,15 @@ Follow these steps or see [Docker](#docker):
 ## Docker
 
 The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together. A `Makefile` wraps every `docker compose` command and automatically injects your host `UID`/`GID` as build args so files written into the `./data` volume are owned by you, not root.
+
+### Production releases
+
+On every merge to `main`, CI runs, then the [Release workflow](.github/workflows/release.yml) builds the app image, pushes it to [GitHub Container Registry](https://github.com/Isaac-DeFrain/scotus-helper/pkgs/container/scotus-helper), and creates a GitHub release tagged `sha-<commit>`. The [Deploy workflow](.github/workflows/deploy.yml) then pulls that image on the VPS.
+
+```shell
+docker pull ghcr.io/isaac-defrain/scotus-helper:latest
+docker pull ghcr.io/isaac-defrain/scotus-helper:sha-<commit>
+```
 
 ### Running the full stack
 

@@ -1,6 +1,8 @@
 services:
   # Remove the exposed port from app — nginx handles ingress
   app:
+    image: ghcr.io/isaac-defrain/scotus-helper:latest
+    build: !reset null
     ports: !reset []
     restart: always
 
