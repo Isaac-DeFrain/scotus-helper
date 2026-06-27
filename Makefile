@@ -4,7 +4,7 @@ export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo dev)
 
 COMPOSE := docker compose
 
-.PHONY: up-prod down-prod up down build logs scrape upload inspect test-nginx help
+.PHONY: up-prod down-prod up down build logs deploy-log scrape upload inspect test-nginx help
 
 help:
 	@echo "Usage: make <target>"
@@ -15,6 +15,7 @@ help:
 	@echo "  down - Stop and remove containers"
 	@echo "  build - Build all images"
 	@echo "  logs - Tail logs for a service: make logs SERVICE=cron"
+	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: .)"
 	@echo "  scrape - Scrape opinions into SQLite"
 	@echo "  upload - Upload opinion chunks to Weaviate"
 	@echo "  inspect - Inspect Weaviate health and collection counts"
@@ -44,6 +45,17 @@ down:
 ## Tail logs for a service: make logs SERVICE=cron
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
+
+DEPLOY_LOG_DIR ?= .
+
+## Print the latest deploy log (deploy-YYYYMMDDHHMMSS.log) in DEPLOY_LOG_DIR
+deploy-log:
+	@latest=$$(ls -1 $(DEPLOY_LOG_DIR)/deploy-*.log 2>/dev/null | sort | tail -1); \
+	if [ -z "$$latest" ]; then \
+		echo "No deploy-*.log files found in $(DEPLOY_LOG_DIR)" >&2; \
+		exit 1; \
+	fi; \
+	cat "$$latest"
 
 ## Scrape opinions into SQLite
 scrape:
