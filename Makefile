@@ -1,5 +1,6 @@
 export UID := $(shell id -u)
 export GID := $(shell id -g)
+export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo dev)
 
 COMPOSE := docker compose
 

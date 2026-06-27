@@ -22,10 +22,13 @@ RUN npm run build
 # ---- runner ----
 FROM node:22-alpine AS runner
 
+ARG GIT_COMMIT=unknown
+
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV GIT_COMMIT=$GIT_COMMIT
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs

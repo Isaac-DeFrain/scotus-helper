@@ -4,6 +4,7 @@
 
 import path from "path";
 
+export const GITHUB_REPO_URL = "https://github.com/Isaac-DeFrain/scotus-helper";
 export const BASE_URL = "https://www.supremecourt.gov";
 export const DELAY_MS = 300;
 
