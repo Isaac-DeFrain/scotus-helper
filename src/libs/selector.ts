@@ -54,6 +54,7 @@ Here are some examples of queries and the appropriate retrieval strategy:
 - "How many opinions were decided in 2023?": "sql"
 - "What is the most recent opinion?": "sql"
 - "When was Trump v. Illinois decided?": "sql"
+- "Summarize the latest court decision": "sql"
 - "Summarize the opinion in the case of Brakebill v. Jaeger": "sql"
 
 - "What did the Court say about religious liberty?": "vector"
@@ -68,6 +69,7 @@ Here are some examples of queries and the appropriate retrieval strategy:
 - "What is the weather in Tokyo?": "none"
 - "How to bake a cake?": "none"
 - "Where is Waldo?": "none"
+- "How many bottles in a case of beer?": "none"
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {
