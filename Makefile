@@ -69,14 +69,11 @@ upload:
 	$(COMPOSE) run --rm upload
 
 CONFIG ?= prod
+COMPOSE_FILES := $(if $(filter prod,$(CONFIG)),-f docker-compose.yml -f docker-compose.prod.yml,)
 
 ## Inspect Weaviate health and collection counts
 inspect:
-	@if [ "$(CONFIG)" = "prod" ]; then \
-		$(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps upload npm run inspect-weaviate \
-	else \
-		$(COMPOSE) run --rm upload npm run inspect-weaviate \
-	fi
+	$(COMPOSE) $(COMPOSE_FILES) run --rm $(if $(filter prod,$(CONFIG)),--no-deps,) upload npm run inspect-weaviate
 
 #
 # Test
