@@ -1,4 +1,8 @@
 import { Source } from "./chat";
+import type { QueryStats } from "./queryCost";
+
+export const QUERY_STATS_META_PREFIX = "\n\n<!--SCOTUS_QUERY_META:";
+export const QUERY_STATS_META_SUFFIX = "-->";
 
 /**
  * Format a date in seconds since Unix epoch to YYYY-MM-DD.
@@ -24,6 +28,61 @@ export function base64JsonToSources(b64: string): Source[] {
 
   const json = new TextDecoder().decode(bytes);
   return JSON.parse(json);
+}
+
+/**
+ * Appends encoded query stats to a streamed chat response.
+ *
+ * @param stats - Aggregated query cost breakdown
+ * @returns Stream suffix containing base64-encoded JSON stats
+ */
+export function encodeQueryStats(stats: QueryStats): string {
+  const json = JSON.stringify(stats);
+  const b64 =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(json, "utf8").toString("base64")
+      : btoa(json);
+  return `${QUERY_STATS_META_PREFIX}${b64}${QUERY_STATS_META_SUFFIX}`;
+}
+
+/**
+ * Separates streamed answer text from an appended query-stats suffix.
+ *
+ * @param text - Accumulated stream text, possibly including a partial or full suffix
+ * @returns Display content and parsed stats when the suffix is complete
+ */
+export function splitStreamContentAndStats(text: string): {
+  content: string;
+  stats?: QueryStats;
+} {
+  const prefixIndex = text.indexOf(QUERY_STATS_META_PREFIX);
+  if (prefixIndex === -1) {
+    const partialStart = text.lastIndexOf("\n\n<!--");
+    if (partialStart !== -1) {
+      const tail = text.slice(partialStart);
+      if (
+        QUERY_STATS_META_PREFIX.startsWith(tail) ||
+        tail.startsWith("\n\n<!--SCOTUS")
+      ) {
+        return { content: text.slice(0, partialStart) };
+      }
+    }
+
+    return { content: text };
+  }
+
+  const content = text.slice(0, prefixIndex);
+  const metaPart = text.slice(prefixIndex + QUERY_STATS_META_PREFIX.length);
+  const suffixIndex = metaPart.indexOf(QUERY_STATS_META_SUFFIX);
+  if (suffixIndex === -1) return { content };
+
+  const b64 = metaPart.slice(0, suffixIndex);
+  try {
+    const stats = JSON.parse(atob(b64)) as QueryStats;
+    return { content, stats };
+  } catch {
+    return { content };
+  }
 }
 
 /**

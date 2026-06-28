@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import type OpenAI from "openai";
 
 import { DDL } from "../db";
 import { CompiledQuery } from "kysely";
@@ -19,12 +20,7 @@ export const sqlQueryGeneratorResponseSchema = z.object({
     .describe("Reason why the SQL query is needed to answer the question"),
 });
 
-export type SqlQueryGeneratorResponse = z.infer<
-  typeof sqlQueryGeneratorResponseSchema
->;
-
-const SQL_QUERY_GENERATOR_MODEL = "gpt-4o";
-
+export const SQL_QUERY_GENERATOR_MODEL = "gpt-4o";
 const SYSTEM_PROMPT = `You are a SQL query-generation agent for a Supreme Court opinion research tool.
 
 You have access to a SQLite database with the following schema:
@@ -49,15 +45,20 @@ Respond ONLY with a JSON object matching this schema exactly (no markdown, no ex
   "reason": "<concise explanation of why the SQL query is needed to answer the question>"
 }`;
 
+export type SqlQueryGeneratorRunResult = {
+  response: z.infer<typeof sqlQueryGeneratorResponseSchema>;
+  usage: OpenAI.Completions.CompletionUsage | undefined;
+};
+
 /**
  * Generates a SQL query for a normalized user question.
  *
  * @param normalizedQuery - The normalized, on-topic user query
- * @returns The generated SQL query and a brief explanation
+ * @returns The generated SQL query, explanation, and usage
  */
 export async function runSqlQueryGenerator(
   normalizedQuery: string,
-): Promise<SqlQueryGeneratorResponse> {
+): Promise<SqlQueryGeneratorRunResult> {
   const openai = openaiClient();
   const completion = await openai.chat.completions.create({
     model: SQL_QUERY_GENERATOR_MODEL,
@@ -73,7 +74,10 @@ export async function runSqlQueryGenerator(
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
-  return sqlQueryGeneratorResponseSchema.parse(JSON.parse(raw));
+  return {
+    response: sqlQueryGeneratorResponseSchema.parse(JSON.parse(raw)),
+    usage: completion.usage,
+  };
 }
 
 /**

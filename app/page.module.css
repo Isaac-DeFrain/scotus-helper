@@ -68,7 +68,113 @@
 
 .messageHeader {
 	font-weight: 600;
-	margin: 0 0 0.25rem;
+	margin: 0;
+}
+
+.messageHeaderRow {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 0.375rem;
+	margin-bottom: 0.25rem;
+}
+
+.messageMetaDivider {
+	color: var(--muted);
+	font-size: 0.75rem;
+	font-weight: 400;
+}
+
+.messageMeta {
+	position: relative;
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.125rem;
+	font-size: 0.75rem;
+	font-weight: 400;
+	color: var(--muted);
+	white-space: nowrap;
+}
+
+.statsTrigger {
+	position: relative;
+	cursor: help;
+	border-bottom: 1px dotted transparent;
+}
+
+.statsTrigger:hover,
+.statsTrigger:focus-visible {
+	border-bottom-color: currentColor;
+	outline: none;
+}
+
+.statsTrigger:hover .statsPopover,
+.statsTrigger:focus-visible .statsPopover,
+.statsTrigger:focus-within .statsPopover {
+	display: block;
+}
+
+.statsPopover {
+	display: none;
+	position: absolute;
+	top: calc(100% + 0.375rem);
+	left: 0;
+	z-index: 1;
+	width: max-content;
+	max-width: 18rem;
+	padding: 0.5rem 0.625rem;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	color: var(--muted);
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 0.375rem;
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+	cursor: default;
+	white-space: normal;
+}
+
+.statsPopoverTitle {
+	display: block;
+	margin-bottom: 0.375rem;
+	font-weight: 600;
+	color: var(--text);
+}
+
+.statsPopoverList {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.statsPopoverItem + .statsPopoverItem {
+	margin-top: 0.5rem;
+	padding-top: 0.5rem;
+	border-top: 1px solid var(--border);
+}
+
+.statsPopoverRow {
+	display: flex;
+	justify-content: space-between;
+	gap: 1rem;
+	font-weight: 500;
+	color: var(--text);
+}
+
+.statsPopoverStep {
+	flex: 1;
+}
+
+.statsPopoverValue {
+	flex-shrink: 0;
+	font-variant-numeric: tabular-nums;
+}
+
+.statsPopoverDesc {
+	display: block;
+	margin-top: 0.125rem;
+	font-weight: 400;
+	color: var(--muted);
 }
 
 .messageBody {

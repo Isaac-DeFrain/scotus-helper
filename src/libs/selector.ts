@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import type OpenAI from "openai";
 import { openaiClient } from "./openai";
 
 export const selectorRequestSchema = z.object({
@@ -15,6 +16,9 @@ export const selectorResponseSchema = z.object({
     .describe(
       "Whether the query is about a U.S. Supreme Court opinion, ruling, case, justice, or related legal topic",
     ),
+  isSummary: z
+    .boolean()
+    .describe("Whether the query is asking for a summary of a case"),
   queryType: z
     .enum(QUERY_TYPES)
     .describe("The type of database query needed to answer the question"),
@@ -25,13 +29,10 @@ export const selectorResponseSchema = z.object({
     ),
 });
 
-export type SelectorResponse = z.infer<typeof selectorResponseSchema>;
-
 const SELECTOR_MODEL = "gpt-4o-mini";
-
 const SELECTOR_SYSTEM_PROMPT = `You are a query pre-processor and routing agent for a Supreme Court opinion research tool.
 
-Your task has three parts:
+Your task has four parts:
 1. Normalize the user's query:
    - Fix spelling
    - Expand obvious abbreviations (e.g. "SCOTUS" → "Supreme Court")
@@ -40,7 +41,8 @@ Your task has three parts:
    - When a user asks about "cases", this means Supreme Court cases.
    - When a user asks about "opinions", this means Supreme Court opinions.
    - When a user asks about A v. B, this means the Supreme Court case named A v. B.
-3. If the query is on topic, decide which retrieval strategy is needed to answer it, given these data sources:
+3. Determine if the query is asking for a summary of a case.
+4. If the query is on topic, decide which retrieval strategy is needed to answer it, given these data sources:
    - A SQL database with structured opinions, chunks, and metadata (case name, docket number, term year, decision date, opinion type, URL, full text).
    - A vector store with semantically-indexed opinion text chunks for similarity search.
 
@@ -75,18 +77,24 @@ Respond ONLY with a JSON object matching this schema exactly (no markdown, no ex
 {
   "normalizedQuery": "<normalized question>",
   "isOnTopic": true | false,
+  "isSummary": true | false,
   "queryType": "sql" | "vector" | "both" | "none",
   "reason": "<concise explanation of the on-topic determination and, if on topic, the chosen retrieval strategy>"
 }`;
+
+export type SelectorRunResult = {
+  response: z.infer<typeof selectorResponseSchema>;
+  usage: OpenAI.Completions.CompletionUsage | undefined;
+};
 
 /**
  * Normalizes the user query, determines whether it is about a Supreme Court
  * opinion, and selects the appropriate retrieval strategy.
  *
  * @param query - The raw user query
- * @returns The normalized query, on-topic flag, query type, and reasoning
+ * @returns The normalized query, on-topic flag, query type, reasoning, and usage
  */
-export async function runSelector(query: string): Promise<SelectorResponse> {
+export async function runSelector(query: string): Promise<SelectorRunResult> {
   const openai = openaiClient();
   const completion = await openai.chat.completions.create({
     model: SELECTOR_MODEL,
@@ -99,5 +107,8 @@ export async function runSelector(query: string): Promise<SelectorResponse> {
   });
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
-  return selectorResponseSchema.parse(JSON.parse(raw));
+  return {
+    response: selectorResponseSchema.parse(JSON.parse(raw)),
+    usage: completion.usage,
+  };
 }

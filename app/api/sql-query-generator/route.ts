@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { normalizedQuery } = sqlQueryGeneratorRequestSchema.parse(body);
     const parsed = await runSqlQueryGenerator(normalizedQuery);
-    return NextResponse.json(parsed);
+    return NextResponse.json(parsed.response);
   } catch (error) {
     console.error("Error in /api/sql-query-generator:", error);
     return NextResponse.json(

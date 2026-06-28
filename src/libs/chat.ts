@@ -57,6 +57,49 @@ export function buildSqlContext(sqlRows: Record<string, unknown>[]): string {
   return `<SQL_RESULTS>\n${JSON.stringify(rows, null, 2)}\n</SQL_RESULTS>`;
 }
 
+const SOURCE_DOCUMENT_PATTERN =
+  /<SOURCE_\d+>[\s\S]*?<\/SOURCE_\d+>|<SQL_RESULTS>[\s\S]*?<\/SQL_RESULTS>/g;
+
+function formatSqlResultDocument(row: Record<string, unknown>): string {
+  return `<SQL_RESULTS>\n${JSON.stringify(row, null, 2)}\n</SQL_RESULTS>`;
+}
+
+function expandSqlResultsBlock(block: string): string[] {
+  const match = block.match(/^<SQL_RESULTS>\n([\s\S]*?)\n<\/SQL_RESULTS>$/);
+  if (!match) return [block];
+
+  try {
+    const rows = JSON.parse(match[1]) as unknown;
+    if (!Array.isArray(rows) || rows.length === 0) return [block];
+
+    return rows.map((row) =>
+      formatSqlResultDocument(row as Record<string, unknown>),
+    );
+  } catch {
+    return [block];
+  }
+}
+
+/**
+ * Splits tagged context into individual source documents for reranking.
+ *
+ * Each `<SOURCE_#>` block becomes one document. A `<SQL_RESULTS>` block
+ * containing a JSON array is expanded so each row is reranked separately.
+ *
+ * @param context - Combined context containing `<SOURCE_#>` and/or `<SQL_RESULTS>` blocks
+ * @returns Each source or SQL row as its own document, in source order
+ */
+export function splitSourceDocuments(context: string): string[] {
+  if (!context.trim()) return [];
+
+  return [...context.matchAll(SOURCE_DOCUMENT_PATTERN)].flatMap((match) => {
+    const block = match[0];
+    return block.startsWith("<SQL_RESULTS>")
+      ? expandSqlResultsBlock(block)
+      : [block];
+  });
+}
+
 /**
  * Fetch the sources from the SQLite database
  *

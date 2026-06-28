@@ -13,13 +13,23 @@ import { v4 as uuidv4 } from "uuid";
 import { ChatMarkdown } from "./ChatMarkdown";
 import styles from "./page.module.css";
 import type { Source } from "@/src/libs/chat";
-import { base64JsonToSources } from "@/src/libs/utils";
+import {
+  formatCost,
+  formatDuration,
+  type QueryStats,
+  type QueryStepCost,
+} from "@/src/libs/queryCost";
+import {
+  base64JsonToSources,
+  splitStreamContentAndStats,
+} from "@/src/libs/utils";
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
+  stats?: QueryStats;
   variant?: "default" | "error";
 };
 
@@ -36,6 +46,51 @@ function appendErrorMessage(
       variant: "error",
     },
   ]);
+}
+
+function formatStepValue(
+  step: QueryStepCost,
+  metric: "duration" | "cost",
+): string {
+  return metric === "duration"
+    ? formatDuration(step.durationMs)
+    : formatCost(step.costUsd);
+}
+
+function StatsBreakdown({
+  label,
+  summary,
+  metric,
+  breakdown,
+}: {
+  label: string;
+  summary: string;
+  metric: "duration" | "cost";
+  breakdown: QueryStepCost[];
+}) {
+  return (
+    <span className={styles.statsTrigger} tabIndex={0}>
+      {summary}
+      <span className={styles.statsPopover} role="tooltip">
+        <span className={styles.statsPopoverTitle}>{label}</span>
+        <ul className={styles.statsPopoverList}>
+          {breakdown.map((step) => (
+            <li key={step.step} className={styles.statsPopoverItem}>
+              <span className={styles.statsPopoverRow}>
+                <span className={styles.statsPopoverStep}>{step.label}</span>
+                <span className={styles.statsPopoverValue}>
+                  {formatStepValue(step, metric)}
+                </span>
+              </span>
+              <span className={styles.statsPopoverDesc}>
+                {step.description}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </span>
+    </span>
+  );
 }
 
 export function ChatPage() {
@@ -105,23 +160,38 @@ export function ChatPage() {
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let assistantResponse = "";
 
+      let assistantResponse = "";
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          assistantResponse += decoder.decode(value);
+          assistantResponse += decoder.decode(value, { stream: true });
+          const { content } = splitStreamContentAndStats(assistantResponse);
+
           setMessages((prev) =>
             prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: assistantResponse }
-                : msg,
+              msg.id === assistantMessageId ? { ...msg, content } : msg,
             ),
           );
         }
       }
+
+      assistantResponse += decoder.decode();
+      const { content, stats } = splitStreamContentAndStats(assistantResponse);
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                content,
+                stats,
+              }
+            : msg,
+        ),
+      );
     } catch (error) {
       console.error("Error in chat:", error);
       const message =
@@ -175,13 +245,42 @@ export function ChatPage() {
                     : styles.assistant,
               ].join(" ")}
             >
-              <p className={styles.messageHeader}>
-                {message.role === "user"
-                  ? "You"
-                  : message.variant === "error"
-                    ? "Error"
-                    : "SCOTUS Helper"}
-              </p>
+              <div className={styles.messageHeaderRow}>
+                <p className={styles.messageHeader}>
+                  {message.role === "user"
+                    ? "You"
+                    : message.variant === "error"
+                      ? "Error"
+                      : "SCOTUS Helper"}
+                </p>
+                {message.role === "assistant" &&
+                  message.variant !== "error" &&
+                  message.stats && (
+                    <>
+                      <span
+                        className={styles.messageMetaDivider}
+                        aria-hidden="true"
+                      >
+                        ·
+                      </span>
+                      <div className={styles.messageMeta}>
+                        <StatsBreakdown
+                          label="Response time by step"
+                          summary={formatDuration(message.stats.durationMs)}
+                          metric="duration"
+                          breakdown={message.stats.breakdown}
+                        />
+                        <span aria-hidden="true"> · </span>
+                        <StatsBreakdown
+                          label="Estimated API cost by step"
+                          summary={formatCost(message.stats.costUsd)}
+                          metric="cost"
+                          breakdown={message.stats.breakdown}
+                        />
+                      </div>
+                    </>
+                  )}
+              </div>
               {message.role === "assistant" && message.variant !== "error" ? (
                 <ChatMarkdown
                   content={message.content}
@@ -210,6 +309,9 @@ export function ChatPage() {
 
           {isStreaming && !messages[messages.length - 1]?.content && (
             <div className={[styles.message, styles.assistant].join(" ")}>
+              <div className={styles.messageHeaderRow}>
+                <p className={styles.messageHeader}>SCOTUS Helper</p>
+              </div>
               <p className={styles.messageBody}>Thinking...</p>
             </div>
           )}

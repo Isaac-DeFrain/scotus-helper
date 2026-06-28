@@ -26,7 +26,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { query } = selectorRequestSchema.parse(body);
     const parsed = await runSelector(query);
-    return NextResponse.json(parsed);
+
+    return NextResponse.json(parsed.response);
   } catch (error) {
     console.error("Error in /api/selector:", error);
     return NextResponse.json(
