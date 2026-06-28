@@ -11,6 +11,7 @@ import Image from "next/image";
 import { v4 as uuidv4 } from "uuid";
 
 import { ChatMarkdown } from "./ChatMarkdown";
+import { ThemeToggle } from "./ThemeToggle";
 import styles from "./page.module.css";
 import type { Source } from "@/src/libs/chat";
 import {
@@ -207,16 +208,19 @@ export function ChatPage() {
 
   return (
     <>
-      <h1 className={styles.title}>
-        <Image
-          src="/icon.png"
-          alt=""
-          width={36}
-          height={36}
-          className={styles.titleIcon}
-        />
-        U.S. Supreme Court Helper
-      </h1>
+      <div className={styles.pageHeader}>
+        <h1 className={styles.title}>
+          <Image
+            src="/icon.png"
+            alt=""
+            width={36}
+            height={36}
+            className={styles.titleIcon}
+          />
+          U.S. Supreme Court Helper
+        </h1>
+        <ThemeToggle />
+      </div>
 
       <div className={styles.panel}>
         <h2 className={styles.panelTitle}>
