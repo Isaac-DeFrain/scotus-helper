@@ -12,6 +12,10 @@ import { splitSourceDocuments } from "./chat";
 const RERANK_MODEL = "rerank-v3.5";
 const RERANK_TOP_N = 10;
 
+const TIMEOUT_SECONDS = 30;
+const MAX_RETRIES = 1;
+const HEADERS = { "X-Custom-Header": "value" };
+
 export type RerankResult = {
   results: string[];
   documentCount: number;
@@ -34,6 +38,8 @@ export async function rerank(
   documents: string[],
 ): Promise<RerankResult> {
   console.debug("Rerank query:", query);
+
+  // No documents to rerank, return empty results.
   if (documents.length === 0) {
     return debugReturn("Rerank documents:", {
       results: [],
@@ -42,13 +48,8 @@ export async function rerank(
     });
   }
 
+  // Expand tagged documents into individual source documents.
   const taggedDocuments = expandTaggedDocuments(documents);
-  const cohereApiKey = process.env.COHERE_API_KEY?.trim();
-
-  if (!cohereApiKey) {
-    throw new Error("COHERE_API_KEY is not set");
-  }
-
   if (taggedDocuments.length <= 1) {
     return debugReturn("Rerank documents:", {
       results: taggedDocuments,
@@ -57,19 +58,36 @@ export async function rerank(
     });
   }
 
+  const abortController = new AbortController();
+
+  // Call the Cohere rerank API.
+  const cohereApiKey = process.env.COHERE_API_KEY?.trim();
+  if (!cohereApiKey) {
+    throw new Error("COHERE_API_KEY is not set");
+  }
+
   const cohere = new CohereClientV2({
     token: cohereApiKey,
   });
-  const response = await cohere.rerank({
-    model: RERANK_MODEL,
-    query,
-    documents: taggedDocuments,
-    topN: RERANK_TOP_N,
-  });
+  const response = await cohere.rerank(
+    {
+      model: RERANK_MODEL,
+      query,
+      documents: taggedDocuments,
+      topN: RERANK_TOP_N,
+    },
+    {
+      timeoutInSeconds: TIMEOUT_SECONDS,
+      maxRetries: MAX_RETRIES,
+      abortSignal: abortController.signal,
+      headers: HEADERS,
+    },
+  );
 
+  console.log("Rerank response:", Object.keys(response));
   return debugReturn("Rerank results:", {
     results: response.results.map((r) => taggedDocuments[r.index]),
-    documentCount: taggedDocuments.length,
+    documentCount: response.results.length,
     searchUnits: response.meta?.billedUnits?.searchUnits ?? 1,
   });
 }
