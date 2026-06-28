@@ -28,14 +28,7 @@ jobs:
           echo "${{ secrets.VPS_SSH_HOST_KEYS }}" | base64 -d >> ~/.ssh/known_hosts
 
       - name: Start deployment of the latest version in the background
-        run: |
-          DATE=$(date "+%Y%m%d%H%M%S")
-
-          ssh -i vps_key.pem "${{ secrets.VPS_SSH_USERNAME }}@${{ secrets.VPS_IP }}" bash -c "'
-            set -eo pipefail
-
-            cd scotus-helper
-            git pull origin main
-
-            nohup ./scripts/prod.sh > "deploy-${DATE}.log" 2> "deploy-${DATE}.log" &
-          '"
+        env:
+          VPS_SSH_USERNAME: ${{ secrets.VPS_SSH_USERNAME }}
+          VPS_IP: ${{ secrets.VPS_IP }}
+        run: ./scripts/prod/deploy.sh

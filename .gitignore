@@ -19,5 +19,8 @@ node_modules
 npm-debug.log*
 yarn-debug.log*
 
+# deploy
+deploy-logs/
+
 # misc
 .DS_Store

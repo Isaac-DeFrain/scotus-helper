@@ -1,6 +1,6 @@
 export UID := $(shell id -u)
 export GID := $(shell id -g)
-export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo dev)
+export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 
 COMPOSE := docker compose
 
@@ -15,14 +15,16 @@ help:
 	@echo "  down - Stop and remove containers"
 	@echo "  build - Build all images"
 	@echo "  logs - Tail logs for a service: make logs SERVICE=cron"
-	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: .)"
+	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: deploy-logs)"
 	@echo "  scrape - Scrape opinions into SQLite"
 	@echo "  upload - Upload opinion chunks to Weaviate"
 	@echo "  inspect - Inspect Weaviate health and collection counts"
 	@echo "  test-nginx - Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)"
 	@echo "  help - Show this help message"
 
-## Production
+#
+# Prod
+#
 
 ## Start the full prod stack (build if needed) in detached mode
 up-prod:
@@ -32,7 +34,15 @@ up-prod:
 down-prod:
 	$(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml down
 
-## Development
+DEPLOY_LOG_DIR ?= deploy-logs
+
+## Print the latest deploy log (deploy-YYYYMMDDHHMMSS.log) in DEPLOY_LOG_DIR
+deploy-log:
+	@DEPLOY_LOG_DIR=$(DEPLOY_LOG_DIR) $(PWD)/scripts/prod/deploy-log.sh
+
+#
+# Dev
+#
 
 ## Start the full dev stack (build if needed)
 up:
@@ -42,20 +52,13 @@ up:
 down:
 	$(COMPOSE) down
 
+#
+# General
+#
+
 ## Tail logs for a service: make logs SERVICE=cron
 logs:
 	$(COMPOSE) logs -f $(SERVICE)
-
-DEPLOY_LOG_DIR ?= .
-
-## Print the latest deploy log (deploy-YYYYMMDDHHMMSS.log) in DEPLOY_LOG_DIR
-deploy-log:
-	@latest=$$(ls -1 $(DEPLOY_LOG_DIR)/deploy-*.log 2>/dev/null | sort | tail -1); \
-	if [ -z "$$latest" ]; then \
-		echo "No deploy-*.log files found in $(DEPLOY_LOG_DIR)" >&2; \
-		exit 1; \
-	fi; \
-	cat "$$latest"
 
 ## Scrape opinions into SQLite
 scrape:
@@ -65,57 +68,20 @@ scrape:
 upload:
 	$(COMPOSE) run --rm upload
 
+CONFIG ?= prod
+
 ## Inspect Weaviate health and collection counts
 inspect:
-	$(COMPOSE) run --rm upload npm run inspect-weaviate
+	@if [ "$(CONFIG)" = "prod" ]; then \
+		$(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps upload npm run inspect-weaviate \
+	else \
+		$(COMPOSE) run --rm upload npm run inspect-weaviate \
+	fi
 
-## Validate nginx config syntax and assert runtime behaviours
-## CONFIG selects the config to check and the checks to run: dev (default) or prod
-CONFIG ?= dev
+#
+# Test
+#
+
+## Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)
 test-nginx:
-	@echo "==> Checking nginx/$(CONFIG).conf syntax..."
-ifeq ($(CONFIG),prod)
-	@TMPDIR=$$(mktemp -d) && \
-		trap "rm -rf $$TMPDIR" EXIT && \
-		openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
-			-keyout $$TMPDIR/cloudflare.key.pem \
-			-out    $$TMPDIR/cloudflare.cert.pem \
-			-subj "/CN=localhost" -quiet 2>/dev/null && \
-		docker run --rm \
-			-v $(PWD)/nginx/$(CONFIG).conf:/etc/nginx/nginx.conf:ro \
-			-v $$TMPDIR:/etc/nginx/certs:ro \
-			nginx:1.31-alpine nginx -t
-else
-	@docker run --rm \
-		-v $(PWD)/nginx/$(CONFIG).conf:/etc/nginx/nginx.conf:ro \
-		nginx:1.31-alpine nginx -t
-endif
-	@echo ""
-ifeq ($(CONFIG),prod)
-	@echo "==> Running prod behavioural checks (config must be up: make prod-up)..."
-	@echo -n "  HTTP->HTTPS redirect (301): " && \
-		STATUS=$$(curl -sIo /dev/null -w "%{http_code}" http://localhost/) && \
-		[ "$$STATUS" = "301" ] && echo "PASS ($$STATUS)" || echo "FAIL ($$STATUS)"
-	@echo -n "  HTTPS proxy pass to app (2xx): " && \
-		STATUS=$$(curl -skIo /dev/null -w "%{http_code}" https://localhost/) && \
-		echo "$$STATUS" | grep -qE "^2" && echo "PASS ($$STATUS)" || echo "FAIL ($$STATUS)"
-	@echo -n "  HSTS header: " && \
-		curl -skI https://localhost/ | grep -qi "strict-transport-security" && echo "PASS" || echo "FAIL"
-	@echo -n "  X-Frame-Options header: " && \
-		curl -skI https://localhost/ | grep -qi "x-frame-options" && echo "PASS" || echo "FAIL"
-	@echo -n "  X-Content-Type-Options header: " && \
-		curl -skI https://localhost/ | grep -qi "x-content-type-options" && echo "PASS" || echo "FAIL"
-	@echo -n "  X-Request-Id header: " && \
-		curl -skI https://localhost/ | grep -qi "x-request-id" && echo "PASS" || echo "FAIL"
-	@echo -n "  Gzip encoding: " && \
-		curl -skH "Accept-Encoding: gzip" -I https://localhost/ | grep -qi "content-encoding: gzip" && echo "PASS" || echo "FAIL"
-else
-	@echo "==> Running dev behavioural checks (config must be up: make up)..."
-	@echo -n "  HTTP proxy pass to app (2xx): " && \
-		STATUS=$$(curl -sIo /dev/null -w "%{http_code}" http://localhost/) && \
-		echo "$$STATUS" | grep -qE "^2" && echo "PASS ($$STATUS)" || echo "FAIL ($$STATUS)"
-	@echo -n "  X-Request-Id header: " && \
-		curl -sI http://localhost/ | grep -qi "x-request-id" && echo "PASS" || echo "FAIL"
-	@echo -n "  Gzip encoding: " && \
-		curl -sH "Accept-Encoding: gzip" -I http://localhost/ | grep -qi "content-encoding: gzip" && echo "PASS" || echo "FAIL"
-endif
+	@CONFIG=$(CONFIG) $(PWD)/scripts/test-nginx.sh
