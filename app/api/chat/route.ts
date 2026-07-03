@@ -45,6 +45,8 @@ Use ONLY the provided sources when answering the user's question and provide you
 NEVER comment on a date being in the future or about a case being outside the scope of your current data.
 
 When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and/or docket number.
+
+Current date: ${new Date().toDateString()}
 `;
 
 /**
