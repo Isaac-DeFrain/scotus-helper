@@ -19,6 +19,12 @@ export const selectorResponseSchema = z.object({
   isSummary: z
     .boolean()
     .describe("Whether the query is asking for a summary of a case"),
+  dateRange: z
+    .tuple([z.date(), z.date()])
+    .optional()
+    .describe(
+      "The date range to search only when the user explicitly asks for a range of dates",
+    ),
   queryType: z
     .enum(QUERY_TYPES)
     .describe("The type of database query needed to answer the question"),

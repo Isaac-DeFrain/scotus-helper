@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       selectorStepCost(selectorUsage, performance.now() - selectorStartedAt),
     );
 
-    const { normalizedQuery, isOnTopic, isSummary, queryType } =
+    const { normalizedQuery, isOnTopic, isSummary, queryType, dateRange } =
       selectorResponse;
 
     if (!isOnTopic) {
@@ -126,7 +126,6 @@ export async function POST(req: NextRequest) {
       const sqlStartedAt = performance.now();
       const { response: sqlResponse, usage: sqlUsage } =
         await runSqlQueryGenerator(normalizedQuery);
-
       const db = openReadOnlyDb(DB_PATH);
 
       try {
@@ -136,17 +135,25 @@ export async function POST(req: NextRequest) {
 
         // get chunks for the sql results if no vector chunks are used and text is not in the sql results
         if (chunks.length === 0 && !isSummary && !hasText(sqlRows)) {
-          const chunkResults = await db
+          console.debug("Fetching chunks for SQL results");
+
+          const sqlChunksQuery = db
             .selectFrom("opinion_chunks")
             .selectAll()
             .where(
               "case_name",
               "in",
               sqlRows.map((r) => r.case_name as string),
-            )
-            .execute();
+            );
 
-          chunks = chunkResults.map(toOpinionChunk);
+          if (dateRange) {
+            sqlChunksQuery
+              .where("date", ">=", dateRange[0].getUTCDate())
+              .where("date", "<=", dateRange[1].getUTCDate());
+          }
+
+          const sqlChunks = await sqlChunksQuery.execute();
+          chunks = sqlChunks.map(toOpinionChunk);
         }
       } finally {
         await db.destroy();
