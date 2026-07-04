@@ -14,16 +14,17 @@ STACK_GOALS := $(filter dev prod,$(filter-out $(STACK_TARGETS),$(MAKECMDGOALS)))
 STACK_CONFIG := $(if $(firstword $(STACK_GOALS)),$(firstword $(STACK_GOALS)),dev)
 STACK_COMPOSE_FILES := $(if $(filter prod,$(STACK_CONFIG)),-f docker-compose.yml -f docker-compose.prod.yml,)
 
-.PHONY: up down build logs deploy-log scrape upload inspect test-nginx ci install-githooks uninstall-githooks help
+.PHONY: up down build logs deploy-log scrape upload inspect test-nginx ci install-githooks uninstall-githooks prune help
 
 help:
 	@echo "Usage: make <target>"
 	@echo "Targets:"
 	@echo "  up - Start the stack (build if needed): make up [dev|prod] (default: prod)"
 	@echo "  down - Stop and remove containers: make down [dev|prod] (default: prod)"
+	@echo "  prune - Remove unused Docker resources (stopped containers, networks, dangling images)"
 	@echo "  build - Build all images"
-	@echo "  logs - Print logs (nginx excluded): make logs [follow] [service...]"
-	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: deploy-logs)"
+	@echo "  logs - Print logs (nginx excluded): make logs [follow] [service...] [not service...]"
+	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (currently: $(DEPLOY_LOG_DIR))"
 	@echo "  scrape - Scrape opinions into SQLite"
 	@echo "  upload - Upload opinion chunks to Weaviate"
 	@echo "  inspect - Inspect Weaviate health: make inspect [dev|prod] (default: dev)"
@@ -41,7 +42,9 @@ up:
 down:
 	$(COMPOSE) $(STACK_COMPOSE_FILES) down
 
-DEPLOY_LOG_DIR ?= deploy-logs
+## Remove unused Docker resources (stopped containers, unused networks, dangling images)
+prune:
+	docker system prune --force
 
 ## Print the latest deploy log (deploy-YYYYMMDDHHMMSS.log) in DEPLOY_LOG_DIR
 deploy-log:
@@ -54,11 +57,15 @@ deploy-log:
 COMPOSE_SERVICES := $(shell $(COMPOSE) config --services 2>/dev/null)
 LOG_SERVICES := $(filter-out nginx,$(COMPOSE_SERVICES))
 LOG_FOLLOW := $(if $(filter 1 true yes,$(FOLLOW)),1,$(filter follow --follow,$(MAKECMDGOALS)))
-LOG_TARGETS := $(filter-out logs follow --follow,$(MAKECMDGOALS))
+LOG_GOALS := $(filter-out logs follow --follow,$(MAKECMDGOALS))
+LOG_EXCLUDE := $(shell set -- $(LOG_GOALS); while [ $$# -gt 0 ]; do if [ "$$1" = not ]; then shift; [ $$# -gt 0 ] && echo "$$1"; fi; shift; done)
+LOG_INCLUDE := $(shell set -- $(LOG_GOALS); while [ $$# -gt 0 ]; do if [ "$$1" = not ]; then shift; shift; else echo "$$1"; shift; fi; done)
+LOG_BASE := $(if $(LOG_INCLUDE),$(LOG_INCLUDE),$(LOG_SERVICES))
+LOG_FINAL := $(filter-out $(LOG_EXCLUDE),$(LOG_BASE))
 
-## Print logs (nginx excluded by default): make logs [follow] [service...]
+## Print logs (nginx excluded by default): make logs [follow] [service...] [not service...]
 logs:
-	$(COMPOSE) logs $(if $(LOG_FOLLOW),-f,) $(if $(LOG_TARGETS),$(LOG_TARGETS),$(LOG_SERVICES))
+	$(COMPOSE) logs $(if $(LOG_FOLLOW),-f,) $(LOG_FINAL)
 
 ## Scrape opinions into SQLite
 scrape:
@@ -109,9 +116,9 @@ endif
 # When `make logs follow cron` is used, extra goals must not run their real
 # recipes (e.g. `scrape`) or match existing paths (e.g. `app/`).
 ifeq ($(filter logs,$(MAKECMDGOALS)),logs)
-.PHONY: follow --follow $(filter-out logs follow --follow,$(MAKECMDGOALS))
-follow --follow:
+.PHONY: follow --follow not $(filter-out logs follow --follow not,$(MAKECMDGOALS))
+follow --follow not:
 	@:
-$(filter-out logs follow --follow,$(MAKECMDGOALS)):
+$(filter-out logs follow --follow not,$(MAKECMDGOALS)):
 	@:
 endif

@@ -82,6 +82,9 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    user: "${UID:-1000}:${GID:-1000}"
     depends_on:
       weaviate:
         condition: service_healthy

@@ -26,6 +26,10 @@ RUN npm run build
 FROM node:22-alpine AS runner
 
 ARG GIT_COMMIT=unknown
+# Match host UID/GID (see docker-compose.yml / Makefile) so the app can write
+# to the bind-mounted ./data volume.
+ARG UID=1000
+ARG GID=1000
 
 WORKDIR /app
 
@@ -33,14 +37,23 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GIT_COMMIT=$GIT_COMMIT
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+RUN set -eux; \
+    existing_group="$(getent group "${GID}" | cut -d: -f1 || true)"; \
+    if [ -n "${existing_group}" ]; then \
+      group_name="${existing_group}"; \
+    else \
+      addgroup -g "${GID}" appgroup; \
+      group_name=appgroup; \
+    fi; \
+    if ! getent passwd "${UID}" >/dev/null; then \
+      adduser -D -u "${UID}" -G "${group_name}" appuser; \
+    fi
 
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=${UID}:${GID} /app/.next/standalone ./
+COPY --from=builder --chown=${UID}:${GID} /app/.next/static ./.next/static
+COPY --from=builder --chown=${UID}:${GID} /app/public ./public
 
-USER nextjs
+USER ${UID}:${GID}
 
 EXPOSE 3000
 
