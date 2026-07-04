@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+# Runs the same checks as CI before each commit. Skip with: git commit --no-verify
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/ci-local.sh"

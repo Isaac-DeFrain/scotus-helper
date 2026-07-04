@@ -4,7 +4,7 @@ export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 
 COMPOSE := docker compose
 
-.PHONY: up-prod down-prod up down build logs deploy-log scrape upload inspect test-nginx help
+.PHONY: up-prod down-prod up down build logs deploy-log scrape upload inspect test-nginx ci install-githooks uninstall-githooks help
 
 help:
 	@echo "Usage: make <target>"
@@ -20,6 +20,9 @@ help:
 	@echo "  upload - Upload opinion chunks to Weaviate"
 	@echo "  inspect - Inspect Weaviate health and collection counts"
 	@echo "  test-nginx - Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)"
+	@echo "  ci - Run the same checks as GitHub Actions CI locally"
+	@echo "  install-githooks - Enable the pre-commit hook (runs ci before each commit)"
+	@echo "  uninstall-githooks - Disable the pre-commit hook"
 	@echo "  help - Show this help message"
 
 #
@@ -78,6 +81,18 @@ inspect:
 #
 # Test
 #
+
+## Run the same checks as GitHub Actions CI locally
+ci:
+	@$(PWD)/scripts/ci-local.sh
+
+## Enable the pre-commit hook that runs ci before each commit
+install-githooks:
+	@$(PWD)/scripts/install-githooks.sh
+
+## Disable the pre-commit hook
+uninstall-githooks:
+	@$(PWD)/scripts/uninstall-githooks.sh
 
 ## Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)
 test-nginx:

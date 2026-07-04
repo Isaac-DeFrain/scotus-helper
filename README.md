@@ -70,6 +70,14 @@ Follow these steps or see [Docker](#docker):
     npm install
     ```
 
+    Optional: enable the pre-commit hook so each commit runs the same checks as CI (`npm ci`, audit, lint, typecheck, test):
+
+    ```shell
+    make install-githooks
+    ```
+
+    Run those checks manually with `make ci`. Disable the hook with `make uninstall-githooks`. Skip it once with `git commit --no-verify`. Set `CI_LOCAL_DOCKER=1` before `make ci` to also run the Release workflow Docker build.
+
 2. Set up environment variables in `.env` (see [`.env.example`](./.env.example)).
 
 3. Scrape opinions
