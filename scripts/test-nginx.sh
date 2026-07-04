@@ -2,11 +2,11 @@
 #
 # Validate nginx configuration syntax and run runtime behavioural checks.
 #
-# Invoked by: make test-nginx [CONFIG=dev|prod]
+# Invoked by: make test-nginx [dev|prod]
 #
 # Syntax checks run offline via a throwaway nginx container. Behavioural checks
 # curl the live stack on localhost, so the matching compose profile must already
-# be running (make up for dev, make up-prod for prod).
+# be running (make up dev for dev, make up prod for prod).
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ NGINX_IMAGE="nginx:1.31-alpine"
 
 # dev  -> nginx/dev.conf  (plain HTTP on port 80)
 # prod -> nginx/prod.conf (TLS termination, security headers, HTTP redirect)
-CONFIG="${CONFIG:-dev}"
+CONFIG="${CONFIG:-prod}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCALHOST="http://localhost/"
 
@@ -120,7 +120,7 @@ check_syntax() {
 
 # Prod stack checks: TLS redirect, reverse proxy, security headers, and gzip.
 run_prod_checks() {
-  echo "==> Running prod behavioral checks (config must be up: make up-prod)..."
+  echo "==> Running prod behavioral checks (config must be up: make up prod)..."
   local failed=0
 
   check_status "HTTP->HTTPS redirect (301)" "301" curl "$LOCALHOST" || failed=1
@@ -137,7 +137,7 @@ run_prod_checks() {
 
 # Dev stack checks: plain HTTP proxy, request id propagation, and gzip.
 run_dev_checks() {
-  echo "==> Running dev behavioral checks (config must be up: make up)..."
+  echo "==> Running dev behavioral checks (config must be up: make up dev)..."
   local failed=0
 
   check_status_2xx "HTTP proxy pass to app (2xx)" curl "$LOCALHOST" || failed=1

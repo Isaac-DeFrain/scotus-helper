@@ -123,19 +123,20 @@ docker pull ghcr.io/isaac-defrain/scotus-helper:sha-<commit>
 
 ```shell
 cp .env.example .env   # fill in OPENAI_API_KEY, COHERE_API_KEY
-make up
+make up dev
 ```
 
 The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
 
 ### Automatic daily sync (cron)
 
-The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `make up`.
+The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `make up dev`.
 
 View its output:
 
 ```shell
-make logs SERVICE=cron
+make logs cron
+make logs follow cron   # tail -f
 ```
 
 To change the schedule, edit the `RUN echo "0 8 * * * …"` line in `Dockerfile.cron` using standard cron syntax, then rebuild:
@@ -150,14 +151,16 @@ docker compose up -d cron
 Use the [Makefile](./Makefile)
 
 ```shell
-make scrape   # scrape opinions and store in SQLite
-make upload   # upload opinion chunks to Weaviate
-make inspect  # inspect Weaviate health and collection counts
+make scrape         # scrape opinions and store in SQLite
+make upload         # upload opinion chunks to Weaviate
+make inspect dev    # inspect Weaviate health and collection counts
 ```
 
 ## Scripts
 
-1. `npm run scrape-opinions` — fetches the merits and orders listing pages, downloads each PDF, extracts text, and upserts opinion rows into SQLite (`data/opinions.db`). If a listing link includes `#page=N`, only pages from that start through the next opinion in the same file (or the end of the PDF) are stored; otherwise the whole PDF is used. Rows that share the same file batch one download. Defaults to the current term.
+1. `npm run scrape-opinions`
+
+    Fetches the merits and orders listing pages, downloads each PDF, extracts text, and upserts opinion rows into SQLite (`data/opinions.db`). If a listing link includes `#page=N`, only pages from that start through the next opinion in the same file (or the end of the PDF) are stored; otherwise the whole PDF is used. Rows that share the same file batch one download. Defaults to the current term.
 
     | Flag | Behaviour |
     | ---- | --------- |
@@ -165,9 +168,13 @@ make inspect  # inspect Weaviate health and collection counts
     | `-- --all` | all terms from 2018 to present |
     | `-- --term 24` or `-- --term 2024` | October Term 2024 only |
 
-2. `npm run upload-opinions` — for each opinion in SQLite, chunks the text and calls OpenAI (`text-embedding-3-small`) to generate embeddings, caching results in an `opinion_chunks` table so re-runs skip already-embedded opinions. Then batch-upserts all chunks as vectors into Weaviate (`SupremeCourtOpinions` collection, created automatically if absent).
+2. `npm run upload-opinions`
 
-3. `npm run inspect-weaviate` — prints Weaviate health (live/ready/version), lists all collections, and for `SupremeCourtOpinions` shows the object count and a sample object.
+    For each opinion in SQLite, chunks the text and calls OpenAI (`text-embedding-3-small`) to generate embeddings, caching results in an `opinion_chunks` table so re-runs skip already-embedded opinions. Then batch-upserts all chunks as vectors into Weaviate (`SupremeCourtOpinions` collection, created automatically if absent).
+
+3. `npm run inspect-weaviate`
+
+    Prints Weaviate health (live/ready/version), lists all collections, and for `SupremeCourtOpinions` shows the object count and a sample object.
 
 ## Test
 

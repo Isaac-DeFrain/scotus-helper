@@ -1,41 +1,45 @@
+# Host user/group for cron container file ownership (see docker-compose.yml).
 export UID := $(shell id -u)
 export GID := $(shell id -g)
+
+# Baked into the app image at build time (shown in the UI footer).
 export GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 
 COMPOSE := docker compose
 
-.PHONY: up-prod down-prod up down build logs deploy-log scrape upload inspect test-nginx ci install-githooks uninstall-githooks help
+# STACK_* selects dev vs prod from the first goal after up/down/test-nginx/inspect
+# (e.g. make up dev). Defaults to prod when omitted.
+STACK_TARGETS := up down test-nginx inspect
+STACK_GOALS := $(filter dev prod,$(filter-out $(STACK_TARGETS),$(MAKECMDGOALS)))
+STACK_CONFIG := $(if $(firstword $(STACK_GOALS)),$(firstword $(STACK_GOALS)),dev)
+STACK_COMPOSE_FILES := $(if $(filter prod,$(STACK_CONFIG)),-f docker-compose.yml -f docker-compose.prod.yml,)
+
+.PHONY: up down build logs deploy-log scrape upload inspect test-nginx ci install-githooks uninstall-githooks help
 
 help:
 	@echo "Usage: make <target>"
 	@echo "Targets:"
-	@echo "  up-prod - Start the full stack (build if needed)"
-	@echo "  down-prod - Stop and remove containers"
-	@echo "  up - Start the full stack (build if needed)"
-	@echo "  down - Stop and remove containers"
+	@echo "  up - Start the stack (build if needed): make up [dev|prod] (default: prod)"
+	@echo "  down - Stop and remove containers: make down [dev|prod] (default: prod)"
 	@echo "  build - Build all images"
-	@echo "  logs - Print logs (nginx excluded): make logs [service...] | make -- logs --follow [service...]"
+	@echo "  logs - Print logs (nginx excluded): make logs [follow] [service...]"
 	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: deploy-logs)"
 	@echo "  scrape - Scrape opinions into SQLite"
 	@echo "  upload - Upload opinion chunks to Weaviate"
-	@echo "  inspect - Inspect Weaviate health and collection counts"
-	@echo "  test-nginx - Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)"
+	@echo "  inspect - Inspect Weaviate health: make inspect [dev|prod] (default: dev)"
+	@echo "  test-nginx - Validate nginx config: make test-nginx [dev|prod] (default: prod)"
 	@echo "  ci - Run the same checks as GitHub Actions CI locally"
 	@echo "  install-githooks - Enable the pre-commit hook (runs ci before each commit)"
 	@echo "  uninstall-githooks - Disable the pre-commit hook"
 	@echo "  help - Show this help message"
 
-#
-# Prod
-#
+## Start the stack (build if needed); prod runs detached
+up:
+	$(COMPOSE) $(STACK_COMPOSE_FILES) up $(if $(filter prod,$(STACK_CONFIG)),-d,) --build
 
-## Start the full prod stack (build if needed) in detached mode
-up-prod:
-	$(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-
-## Stop and remove prod containers
-down-prod:
-	$(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml down
+## Stop and remove containers
+down:
+	$(COMPOSE) $(STACK_COMPOSE_FILES) down
 
 DEPLOY_LOG_DIR ?= deploy-logs
 
@@ -44,27 +48,15 @@ deploy-log:
 	@DEPLOY_LOG_DIR=$(DEPLOY_LOG_DIR) $(PWD)/scripts/prod/deploy-log.sh
 
 #
-# Dev
-#
-
-## Start the full dev stack (build if needed)
-up:
-	$(COMPOSE) up --build
-
-## Stop and remove dev containers
-down:
-	$(COMPOSE) down
-
-#
 # General
 #
 
 COMPOSE_SERVICES := $(shell $(COMPOSE) config --services 2>/dev/null)
 LOG_SERVICES := $(filter-out nginx,$(COMPOSE_SERVICES))
-LOG_FOLLOW := $(filter follow --follow,$(MAKECMDGOALS))
+LOG_FOLLOW := $(if $(filter 1 true yes,$(FOLLOW)),1,$(filter follow --follow,$(MAKECMDGOALS)))
 LOG_TARGETS := $(filter-out logs follow --follow,$(MAKECMDGOALS))
 
-## Print logs (nginx excluded by default): make logs [service...]; add --follow to tail
+## Print logs (nginx excluded by default): make logs [follow] [service...]
 logs:
 	$(COMPOSE) logs $(if $(LOG_FOLLOW),-f,) $(if $(LOG_TARGETS),$(LOG_TARGETS),$(LOG_SERVICES))
 
@@ -76,12 +68,9 @@ scrape:
 upload:
 	$(COMPOSE) run --rm upload
 
-CONFIG ?= prod
-COMPOSE_FILES := $(if $(filter prod,$(CONFIG)),-f docker-compose.yml -f docker-compose.prod.yml,)
-
 ## Inspect Weaviate health and collection counts
 inspect:
-	$(COMPOSE) $(COMPOSE_FILES) run --rm $(if $(filter prod,$(CONFIG)),--no-deps,) --entrypoint npm upload run inspect-weaviate
+	$(COMPOSE) $(STACK_COMPOSE_FILES) run --rm $(if $(filter prod,$(STACK_CONFIG)),--no-deps,) --entrypoint npm upload run inspect-weaviate
 
 #
 # Test
@@ -91,6 +80,10 @@ inspect:
 ci:
 	@$(PWD)/scripts/ci-local.sh
 
+## Validate nginx config syntax and assert runtime behaviours
+test-nginx:
+	@CONFIG=$(STACK_CONFIG) $(PWD)/scripts/test-nginx.sh
+
 ## Enable the pre-commit hook that runs ci before each commit
 install-githooks:
 	@$(PWD)/scripts/install-githooks.sh
@@ -99,12 +92,22 @@ install-githooks:
 uninstall-githooks:
 	@$(PWD)/scripts/uninstall-githooks.sh
 
-## Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)
-test-nginx:
-	@CONFIG=$(CONFIG) $(PWD)/scripts/test-nginx.sh
+#
+# Stub targets
+#
 
-# When `make logs cron app` is used, extra goals must not run their real recipes
-# (e.g. `scrape`) or match existing paths (e.g. `app/`). Stubs are appended last.
+# When `make up dev`, `make inspect prod`, etc. is used, extra goals must not
+# run their own recipes or match existing paths.
+ifneq ($(filter $(STACK_TARGETS),$(MAKECMDGOALS)),)
+.PHONY: dev prod $(filter-out $(STACK_TARGETS) dev prod,$(MAKECMDGOALS))
+dev prod:
+	@:
+$(filter-out $(STACK_TARGETS) dev prod,$(MAKECMDGOALS)):
+	@:
+endif
+
+# When `make logs follow cron` is used, extra goals must not run their real
+# recipes (e.g. `scrape`) or match existing paths (e.g. `app/`).
 ifeq ($(filter logs,$(MAKECMDGOALS)),logs)
 .PHONY: follow --follow $(filter-out logs follow --follow,$(MAKECMDGOALS))
 follow --follow:
