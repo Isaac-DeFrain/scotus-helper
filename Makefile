@@ -14,7 +14,7 @@ help:
 	@echo "  up - Start the full stack (build if needed)"
 	@echo "  down - Stop and remove containers"
 	@echo "  build - Build all images"
-	@echo "  logs - Tail logs for a service: make logs SERVICE=cron"
+	@echo "  logs - Print logs (nginx excluded): make logs [service...] | make -- logs --follow [service...]"
 	@echo "  deploy-log - Print the latest deploy-*.log in DEPLOY_LOG_DIR (default: deploy-logs)"
 	@echo "  scrape - Scrape opinions into SQLite"
 	@echo "  upload - Upload opinion chunks to Weaviate"
@@ -59,9 +59,14 @@ down:
 # General
 #
 
-## Tail logs for a service: make logs SERVICE=cron
+COMPOSE_SERVICES := $(shell $(COMPOSE) config --services 2>/dev/null)
+LOG_SERVICES := $(filter-out nginx,$(COMPOSE_SERVICES))
+LOG_FOLLOW := $(filter follow --follow,$(MAKECMDGOALS))
+LOG_TARGETS := $(filter-out logs follow --follow,$(MAKECMDGOALS))
+
+## Print logs (nginx excluded by default): make logs [service...]; add --follow to tail
 logs:
-	$(COMPOSE) logs -f $(SERVICE)
+	$(COMPOSE) logs $(if $(LOG_FOLLOW),-f,) $(if $(LOG_TARGETS),$(LOG_TARGETS),$(LOG_SERVICES))
 
 ## Scrape opinions into SQLite
 scrape:
@@ -97,3 +102,13 @@ uninstall-githooks:
 ## Validate nginx config syntax and assert runtime behaviours (CONFIG=dev|prod)
 test-nginx:
 	@CONFIG=$(CONFIG) $(PWD)/scripts/test-nginx.sh
+
+# When `make logs cron app` is used, extra goals must not run their real recipes
+# (e.g. `scrape`) or match existing paths (e.g. `app/`). Stubs are appended last.
+ifeq ($(filter logs,$(MAKECMDGOALS)),logs)
+.PHONY: follow --follow $(filter-out logs follow --follow,$(MAKECMDGOALS))
+follow --follow:
+	@:
+$(filter-out logs follow --follow,$(MAKECMDGOALS)):
+	@:
+endif
