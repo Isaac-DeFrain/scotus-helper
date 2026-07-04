@@ -19,12 +19,6 @@ export const selectorResponseSchema = z.object({
   isSummary: z
     .boolean()
     .describe("Whether the query is asking for a summary of a case"),
-  dateRange: z
-    .tuple([z.date(), z.date()])
-    .optional()
-    .describe(
-      "The date range to search only when the user explicitly asks for a range of dates",
-    ),
   queryType: z
     .enum(QUERY_TYPES)
     .describe("The type of database query needed to answer the question"),
@@ -38,7 +32,7 @@ export const selectorResponseSchema = z.object({
 const SELECTOR_MODEL = "gpt-4o-mini";
 const SELECTOR_SYSTEM_PROMPT = `You are a query pre-processor and routing agent for a Supreme Court opinion research tool.
 
-Your task has four parts:
+Your task has five parts:
 1. Normalize the user's query:
    - Fix spelling
    - Expand obvious abbreviations (e.g. "SCOTUS" → "Supreme Court")

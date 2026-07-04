@@ -19,6 +19,11 @@ import {
   validateAndParseSqlQuery,
 } from "@/src/libs/sqlQueryGenerator";
 import {
+  applyCaseSummariesToSqlRows,
+  extractCaseSummaryInputs,
+  summarizeCases,
+} from "@/src/libs/caseSummarizer";
+import {
   buildVectorContext,
   buildSqlContext,
   getSources,
@@ -32,9 +37,12 @@ import {
   rerankStepCost,
   selectorStepCost,
   sqlStepCost,
+  summaryStepCost,
   type QueryStepCost,
 } from "@/src/libs/queryCost";
 import { encodeQueryStats } from "@/src/libs/utils";
+
+const CURRENT_DATE_MS = Date.now();
 
 const CHAT_MODEL = "gpt-4o";
 const SYSTEM_PROMPT = `
@@ -46,7 +54,7 @@ NEVER comment on a date being in the future or about a case being outside the sc
 
 When citing a source, NEVER use the source number (e.g. "Source 1", "Source 2", etc.), instead use the case name and/or docket number.
 
-Current date: ${new Date().toDateString()}
+Current date: ${new Date(CURRENT_DATE_MS).toDateString()} (${CURRENT_DATE_MS / 1000} Unix epoch seconds UTC)
 `;
 
 /**
@@ -75,7 +83,7 @@ export async function POST(req: NextRequest) {
       selectorStepCost(selectorUsage, performance.now() - selectorStartedAt),
     );
 
-    const { normalizedQuery, isOnTopic, isSummary, queryType, dateRange } =
+    const { normalizedQuery, isOnTopic, isSummary, queryType } =
       selectorResponse;
 
     if (!isOnTopic) {
@@ -146,12 +154,6 @@ export async function POST(req: NextRequest) {
               sqlRows.map((r) => r.case_name as string),
             );
 
-          if (dateRange) {
-            sqlChunksQuery
-              .where("date", ">=", dateRange[0].getUTCDate())
-              .where("date", "<=", dateRange[1].getUTCDate());
-          }
-
           const sqlChunks = await sqlChunksQuery.execute();
           chunks = sqlChunks.map(toOpinionChunk);
         }
@@ -160,6 +162,17 @@ export async function POST(req: NextRequest) {
       }
 
       stepCosts.push(sqlStepCost(sqlUsage, performance.now() - sqlStartedAt));
+    }
+
+    if (isSummary && hasText(sqlRows)) {
+      const summaryStartedAt = performance.now();
+      const caseInputs = extractCaseSummaryInputs(sqlRows);
+      const { results, usages } = await summarizeCases(caseInputs);
+
+      sqlRows = applyCaseSummariesToSqlRows(sqlRows, results);
+      stepCosts.push(
+        summaryStepCost(usages, performance.now() - summaryStartedAt),
+      );
     }
 
     // Fetch the sources from the SQLite database

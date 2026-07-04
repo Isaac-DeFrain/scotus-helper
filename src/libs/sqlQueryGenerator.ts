@@ -21,6 +21,8 @@ export const sqlQueryGeneratorResponseSchema = z.object({
 });
 
 export const SQL_QUERY_GENERATOR_MODEL = "gpt-4o";
+
+const CURRENT_DATE_MS = Date.now();
 const SYSTEM_PROMPT = `You are a SQL query-generation agent for a Supreme Court opinion research tool.
 
 You have access to a SQLite database with the following schema:
@@ -38,6 +40,8 @@ If the question is about a specific date, make sure to use the \`date\` field (i
 If asked to summarize a case, SELECT the \`text\` field from the opinion table.
 
 ALWAYS include the \`case_name\` field in the SELECT list.
+
+The current date is ${new Date(CURRENT_DATE_MS).toDateString()} (${CURRENT_DATE_MS / 1000} Unix epoch seconds UTC).
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {

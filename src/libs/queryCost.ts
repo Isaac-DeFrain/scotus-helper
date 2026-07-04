@@ -6,7 +6,13 @@
 
 import type OpenAI from "openai";
 
-export type QueryStep = "selector" | "embedding" | "sql" | "rerank" | "chat";
+export type QueryStep =
+  | "selector"
+  | "embedding"
+  | "sql"
+  | "summary"
+  | "rerank"
+  | "chat";
 
 export type QueryStepCost = {
   step: QueryStep;
@@ -156,6 +162,39 @@ export function sqlStepCost(
     durationMs,
     inputTokens: usage?.prompt_tokens,
     outputTokens: usage?.completion_tokens,
+  };
+}
+
+/**
+ * Builds the cost record for parallel per-case summary steps (`gpt-4o-mini`).
+ *
+ * @param usages - Token usage from each parallel summary completion
+ * @returns Step cost for display and aggregation
+ */
+export function summaryStepCost(
+  usages: (OpenAI.Completions.CompletionUsage | undefined)[],
+  durationMs: number,
+): QueryStepCost {
+  const costUsd = usages.reduce(
+    (sum, usage) => sum + costFromOpenAIUsage("gpt-4o", usage),
+    0,
+  );
+
+  return {
+    step: "summary",
+    label: "Summary",
+    description:
+      "Summarizes each opinion's full text in parallel before composing the final answer.",
+    costUsd,
+    durationMs,
+    inputTokens: usages.reduce(
+      (sum, usage) => sum + (usage?.prompt_tokens ?? 0),
+      0,
+    ),
+    outputTokens: usages.reduce(
+      (sum, usage) => sum + (usage?.completion_tokens ?? 0),
+      0,
+    ),
   };
 }
 
