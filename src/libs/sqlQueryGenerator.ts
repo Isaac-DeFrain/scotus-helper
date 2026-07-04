@@ -35,13 +35,13 @@ To answer the user's question, generate a valid SQL query against the above data
 
 The query must ONLY ever read data from the database, i.e. it should ONLY ever be a SELECT statement.
 
-If the question is about a specific date, make sure to use the \`date\` field (in seconds since Unix epoch) to filter the results.
+If the question is about a specific date or range of dates, ALWAYS filter the \`date\` field using Unix epoch seconds UTC.
+
+The current date is ${new Date(CURRENT_DATE_MS).toDateString()} (${CURRENT_DATE_MS / 1000} Unix epoch seconds UTC).
 
 If asked to summarize a case, SELECT the \`text\` field from the opinion table.
 
 ALWAYS include the \`case_name\` field in the SELECT list.
-
-The current date is ${new Date(CURRENT_DATE_MS).toDateString()} (${CURRENT_DATE_MS / 1000} Unix epoch seconds UTC).
 
 Respond ONLY with a JSON object matching this schema exactly (no markdown, no extra keys):
 {
