@@ -43,6 +43,7 @@ services:
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
+    user: "${UID:-1000}:${GID:-1000}"
     env_file:
       - .env
     environment:
@@ -60,6 +61,7 @@ services:
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
+    user: "${UID:-1000}:${GID:-1000}"
     depends_on:
       weaviate:
         condition: service_healthy

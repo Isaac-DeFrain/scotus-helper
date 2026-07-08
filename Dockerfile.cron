@@ -2,6 +2,11 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+# Match host UID/GID (see docker-compose.yml / Makefile) so scrape/upload/cron
+# sync jobs write to the bind-mounted ./data volume as the host user.
+ARG UID=1000
+ARG GID=1000
+
 RUN apk add --no-cache python3 make g++
 
 COPY package*.json ./
@@ -13,8 +18,26 @@ COPY tsconfig.json ./
 
 RUN chmod +x /app/scripts/docker/cron-entrypoint.sh /app/scripts/docker/run-sync.sh
 
-# Run sync daily at 08:00 UTC; redirect output to PID 1 stdout for docker compose logs
-RUN echo "0 8 * * * /app/scripts/docker/run-sync.sh >> /proc/1/fd/1 2>&1" \
-    > /etc/crontabs/root
+RUN set -eux; \
+    existing_group="$(getent group "${GID}" | cut -d: -f1 || true)"; \
+    if [ -n "${existing_group}" ]; then \
+      group_name="${existing_group}"; \
+    else \
+      addgroup -g "${GID}" appgroup; \
+      group_name=appgroup; \
+    fi; \
+    if ! getent passwd "${UID}" >/dev/null; then \
+      adduser -D -u "${UID}" -G "${group_name}" appuser; \
+    fi
+
+RUN chown -R ${UID}:${GID} /app
+
+# Run sync daily at 08:00 UTC as the app user; redirect output to PID 1 stdout
+# for docker compose logs. crond stays root; jobs in /etc/crontabs/<user> drop
+# privileges automatically.
+RUN APP_USER="$(getent passwd "${UID}" | cut -d: -f1)" && \
+    echo "0 8 * * * /app/scripts/docker/run-sync.sh >> /proc/1/fd/1 2>&1" \
+      > "/etc/crontabs/${APP_USER}" && \
+    chmod 600 "/etc/crontabs/${APP_USER}"
 
 ENTRYPOINT ["/app/scripts/docker/cron-entrypoint.sh"]
