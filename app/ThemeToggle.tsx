@@ -8,7 +8,7 @@ import {
   persistTheme,
   readThemeFromDocument,
   type Theme,
-} from "@/src/libs/theme";
+} from "@/src/theme";
 
 function SunIcon() {
   return (

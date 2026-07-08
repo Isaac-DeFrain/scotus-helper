@@ -1,7 +1,7 @@
 import { DB_PATH } from "../constants";
-import { openReadOnlyDb } from "../db";
-import { OpinionChunk } from "./opinionUtils";
-import { formatDate } from "./utils";
+import { openReadOnlyDb } from "../db/db";
+import { OpinionChunk } from "../opinion";
+import { formatDate } from "../utils";
 
 /**
  * A source returned alongside chat responses, linking to the original PDF

@@ -1,4 +1,5 @@
-import { splitSourceDocuments } from "./chat";
+import { splitSourceDocuments } from "./chat/chat";
+import { selectRerankedDocuments } from "./rerank";
 
 describe("splitSourceDocuments", () => {
   it("splits vector source blocks", () => {
@@ -75,6 +76,40 @@ Chunk text.
 
     expect(splitSourceDocuments(context)).toHaveLength(2);
     expect(splitSourceDocuments(context)[0]).toContain("<SOURCE_1>");
-    expect(splitSourceDocuments(context)[1]).toContain('"case_name": "Alpha v. Beta"');
+    expect(splitSourceDocuments(context)[1]).toContain(
+      '"case_name": "Alpha v. Beta"',
+    );
+  });
+});
+
+describe("selectRerankedDocuments", () => {
+  it("keeps a single document regardless of score", () => {
+    expect(
+      selectRerankedDocuments([{ document: "only source", score: 0.1 }]),
+    ).toEqual([{ document: "only source", score: 0.1 }]);
+  });
+
+  it("drops low-scoring documents when multiple candidates exist", () => {
+    const results = [
+      { document: "strong", score: 0.92 },
+      { document: "weak", score: 0.31 },
+      { document: "borderline", score: 0.5 },
+    ];
+
+    expect(selectRerankedDocuments(results)).toEqual([
+      { document: "strong", score: 0.92 },
+      { document: "borderline", score: 0.5 },
+    ]);
+  });
+
+  it("keeps the top document when every score is below the threshold", () => {
+    const results = [
+      { document: "best of bad", score: 0.2 },
+      { document: "worse", score: 0.1 },
+    ];
+
+    expect(selectRerankedDocuments(results)).toEqual([
+      { document: "best of bad", score: 0.2 },
+    ]);
   });
 });

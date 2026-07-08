@@ -1,7 +1,10 @@
-import { GITHUB_REPO_URL } from "../constants";
+import { GITHUB_REPO_URL } from "./constants";
 
 /**
  * Returns the git commit SHA baked into this build, or "unknown" if unset.
+ *
+ * Inlined into the client bundle via `next.config.ts` `env` so footer text
+ * matches between SSR and hydration.
  */
 export function getGitCommit(): string {
   return process.env.GIT_COMMIT ?? "unknown";

@@ -15,7 +15,7 @@ import { NextResponse, NextRequest } from "next/server";
 import {
   sqlQueryGeneratorRequestSchema,
   runSqlQueryGenerator,
-} from "@/src/libs/sqlQueryGenerator";
+} from "@/src/api/sqlQueryGenerator";
 
 /**
  * SQL query generator endpoint

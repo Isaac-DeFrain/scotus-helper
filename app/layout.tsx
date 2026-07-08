@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import "./globals.css";
-import { themeInitScript } from "@/src/libs/theme";
+import { themeInitScript } from "@/src/theme";
 
 export const metadata: Metadata = {
   title: "U.S. Supreme Court Helper",

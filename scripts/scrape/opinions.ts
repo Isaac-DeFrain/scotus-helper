@@ -27,12 +27,9 @@ import axios from "axios";
 import { PDFParse } from "pdf-parse";
 
 import { BASE_URL, DELAY_MS, DB_PATH } from "@/src/constants";
-import { countOpinionsForTermYear, openDb } from "@/src/db";
-import {
-  type OpinionMetaData,
-  type OpinionType,
-} from "@/src/libs/opinionUtils";
-import { delay } from "@/src/libs/utils";
+import { countOpinionsForTermYear, openDb } from "@/src/db/db";
+import { type OpinionMetaData, type OpinionType } from "@/src/opinion";
+import { delay } from "@/src/utils";
 import { parseMeritsListingPage } from "./merits";
 import { parseOrdersListingPage } from "./orders";
 import {

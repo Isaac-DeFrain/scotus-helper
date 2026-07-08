@@ -13,7 +13,7 @@
 
 import { NextResponse, NextRequest } from "next/server";
 
-import { selectorRequestSchema, runSelector } from "@/src/libs/selector";
+import { selectorRequestSchema, runSelector } from "@/src/api/selector";
 
 /**
  * Selector endpoint

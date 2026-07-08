@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 import type OpenAI from "openai";
-import { openaiClient } from "./openai";
+import { langsmithCallOptions } from "../langsmith/langsmithTracing";
+import { openaiClient } from "../openai";
 
 export const selectorRequestSchema = z.object({
   query: z.string().min(1).describe("The raw user query"),
@@ -96,15 +97,18 @@ export type SelectorRunResult = {
  */
 export async function runSelector(query: string): Promise<SelectorRunResult> {
   const openai = openaiClient();
-  const completion = await openai.chat.completions.create({
-    model: SELECTOR_MODEL,
-    temperature: 0,
-    response_format: zodResponseFormat(selectorResponseSchema, "selector"),
-    messages: [
-      { role: "system", content: SELECTOR_SYSTEM_PROMPT },
-      { role: "user", content: query },
-    ],
-  });
+  const completion = await openai.chat.completions.create(
+    {
+      model: SELECTOR_MODEL,
+      temperature: 0,
+      response_format: zodResponseFormat(selectorResponseSchema, "selector"),
+      messages: [
+        { role: "system", content: SELECTOR_SYSTEM_PROMPT },
+        { role: "user", content: query },
+      ],
+    },
+    langsmithCallOptions("selector"),
+  );
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
   return {

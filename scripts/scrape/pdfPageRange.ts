@@ -4,7 +4,7 @@
 
 import { type InfoResult } from "pdf-parse";
 
-import { type OpinionMetaData } from "@/src/libs/opinionUtils";
+import { type OpinionMetaData } from "@/src/opinion";
 
 export type PdfPageSlice = { first: number; last: number };
 

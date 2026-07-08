@@ -3,7 +3,7 @@ import Image from "next/image";
 import { DonateButtons } from "./DonateButtons";
 import styles from "./page.module.css";
 import { GITHUB_REPO_URL } from "@/src/constants";
-import { getGitCommit } from "@/src/libs/buildInfo";
+import { getGitCommit } from "@/src/buildInfo";
 
 const GIT_COMMIT_LENGTH = 8;
 

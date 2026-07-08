@@ -23,6 +23,8 @@ export type QueryStepCost = {
   inputTokens?: number;
   outputTokens?: number;
   searchUnits?: number;
+  /** Populated when loaded from chat.db; omitted from live stream stats. */
+  output?: unknown;
 };
 
 export type QueryStats = {

@@ -7,8 +7,11 @@
 
 import dotenv from "dotenv";
 
-import { WEAVIATE_COLLECTION_NAME } from "@/src/constants";
-import { connectWeaviate } from "@/src/libs/weaviateClient";
+import {
+  formatWeaviateInspection,
+  inspectWeaviateClient,
+} from "@/src/langsmith/inspectWeaviate";
+import { connectWeaviate } from "@/src/weaviate";
 
 dotenv.config();
 
@@ -22,50 +25,8 @@ async function inspectWeaviate(): Promise<void> {
   }
 
   try {
-    const isLive = await client.isLive();
-    const isReady = await client.isReady();
-    const version = await client.getWeaviateVersion();
-
-    console.log("\nWeaviate:");
-    console.log("  isLive: ", isLive);
-    console.log("  isReady:", isReady);
-    console.log("  version:", version.show());
-
-    const collectionConfigs = await client.collections.listAll();
-    const collectionNames = collectionConfigs.map((c) => c.name).sort();
-    console.log(
-      `\nCollections (${collectionNames.length}):`,
-      collectionNames.length > 0 ? collectionNames.join(", ") : "(none)",
-    );
-
-    const exists = await client.collections.exists(WEAVIATE_COLLECTION_NAME);
-    console.log(`\n"${WEAVIATE_COLLECTION_NAME}" exists:`, exists);
-
-    if (!exists) {
-      return;
-    }
-
-    const collection = client.collections.get(WEAVIATE_COLLECTION_NAME);
-    const total = await collection.length();
-    console.log("  object count:", total);
-
-    if (total === 0) {
-      return;
-    }
-
-    const { objects } = await collection.query.fetchObjects({
-      limit: 1,
-    });
-
-    const sample = objects[0];
-    console.log("\nSample object:");
-    if (!sample) {
-      console.log("  (no rows returned)");
-      return;
-    }
-
-    console.log("  uuid:", sample.uuid);
-    console.log("  properties:", sample.properties);
+    const result = await inspectWeaviateClient(client);
+    console.log(formatWeaviateInspection(result));
   } finally {
     await client.close();
   }

@@ -1,4 +1,4 @@
-import { GITHUB_REPO_URL } from "../constants";
+import { GITHUB_REPO_URL } from "./constants";
 import { formatVersionResponse, getGitCommit } from "./buildInfo";
 
 function restoreEnvVars(vars: Record<string, string | undefined>) {

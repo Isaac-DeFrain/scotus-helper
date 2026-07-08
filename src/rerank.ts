@@ -7,17 +7,24 @@
 
 import { CohereClientV2 } from "cohere-ai";
 
-import { splitSourceDocuments } from "./chat";
+import { splitSourceDocuments } from "./chat/chat";
 
 const RERANK_MODEL = "rerank-v3.5";
 const RERANK_TOP_N = 10;
+/** Minimum relevance score when multiple reranked documents are available. */
+export const RERANK_MIN_SCORE = 0.5;
 
 const TIMEOUT_SECONDS = 30;
 const MAX_RETRIES = 1;
 const HEADERS = { "X-Custom-Header": "value" };
 
+export type RerankedDocument = {
+  document: string;
+  score: number;
+};
+
 export type RerankResult = {
-  results: string[];
+  results: RerankedDocument[];
   documentCount: number;
   searchUnits: number;
 };
@@ -52,7 +59,7 @@ export async function rerank(
   const taggedDocuments = expandTaggedDocuments(documents);
   if (taggedDocuments.length <= 1) {
     return debugReturn("Rerank documents:", {
-      results: taggedDocuments,
+      results: taggedDocuments.map((document) => ({ document, score: 1 })),
       documentCount: taggedDocuments.length,
       searchUnits: 0,
     });
@@ -86,10 +93,28 @@ export async function rerank(
 
   console.log("Rerank response:", Object.keys(response));
   return debugReturn("Rerank results:", {
-    results: response.results.map((r) => taggedDocuments[r.index]),
+    results: response.results.map((r) => ({
+      document: taggedDocuments[r.index],
+      score: r.relevanceScore,
+    })),
     documentCount: response.results.length,
     searchUnits: response.meta?.billedUnits?.searchUnits ?? 1,
   });
+}
+
+/**
+ * Keeps reranked documents that meet {@link RERANK_MIN_SCORE} when more than
+ * one candidate exists. A single remaining document is always kept.
+ */
+export function selectRerankedDocuments(
+  results: RerankedDocument[],
+): RerankedDocument[] {
+  if (results.length <= 1) {
+    return results;
+  }
+
+  const selected = results.filter(({ score }) => score >= RERANK_MIN_SCORE);
+  return selected.length > 0 ? selected : [results[0]];
 }
 
 // Debug helper to log the rerank results.

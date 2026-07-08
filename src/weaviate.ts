@@ -7,8 +7,8 @@
 import weaviate, { WeaviateClient } from "weaviate-client";
 import { z } from "zod";
 
-import { EMBEDDING_DIMENSIONS, WEAVIATE_COLLECTION_NAME } from "../constants";
-import { OpinionChunk } from "./opinionUtils";
+import { EMBEDDING_DIMENSIONS, WEAVIATE_COLLECTION_NAME } from "./constants";
+import { OpinionChunk } from "./opinion";
 import { delay } from "./utils";
 
 const NEAR_VECTOR_LIMIT = 20;

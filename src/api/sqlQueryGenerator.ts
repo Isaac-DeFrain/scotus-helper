@@ -2,9 +2,10 @@ import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
 import type OpenAI from "openai";
 
-import { DDL } from "../db";
+import { DDL } from "../db/db";
 import { CompiledQuery } from "kysely";
-import { openaiClient } from "./openai";
+import { langsmithCallOptions } from "../langsmith/langsmithTracing";
+import { openaiClient } from "../openai";
 
 export const sqlQueryGeneratorRequestSchema = z.object({
   normalizedQuery: z
@@ -64,18 +65,21 @@ export async function runSqlQueryGenerator(
   normalizedQuery: string,
 ): Promise<SqlQueryGeneratorRunResult> {
   const openai = openaiClient();
-  const completion = await openai.chat.completions.create({
-    model: SQL_QUERY_GENERATOR_MODEL,
-    temperature: 0,
-    response_format: zodResponseFormat(
-      sqlQueryGeneratorResponseSchema,
-      "sql_query_generator",
-    ),
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: normalizedQuery },
-    ],
-  });
+  const completion = await openai.chat.completions.create(
+    {
+      model: SQL_QUERY_GENERATOR_MODEL,
+      temperature: 0,
+      response_format: zodResponseFormat(
+        sqlQueryGeneratorResponseSchema,
+        "sql_query_generator",
+      ),
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: normalizedQuery },
+      ],
+    },
+    langsmithCallOptions("sql"),
+  );
 
   const raw = completion.choices[0]?.message?.content ?? "{}";
   return {

@@ -1,8 +1,6 @@
+import type { Source } from "./chat/chat";
 import type { QueryStats } from "./queryCost";
-import {
-  encodeQueryStats,
-  splitStreamContentAndStats,
-} from "./utils";
+import { encodeQueryStats, splitStreamContentAndStats } from "./utils";
 
 describe("splitStreamContentAndStats", () => {
   const stats: QueryStats = {
@@ -37,6 +35,23 @@ describe("splitStreamContentAndStats", () => {
     expect(splitStreamContentAndStats(text)).toEqual({
       content: "Answer text",
       stats,
+    });
+  });
+
+  it("parses sources when included in the stream suffix", () => {
+    const sources: Source[] = [
+      {
+        caseName: "Example v. Test",
+        docket: "23-719",
+        pdfUrl: "https://example.com/opinion.pdf",
+      },
+    ];
+    const text = `Answer text${encodeQueryStats(stats, sources)}`;
+
+    expect(splitStreamContentAndStats(text)).toEqual({
+      content: "Answer text",
+      stats,
+      sources,
     });
   });
 });

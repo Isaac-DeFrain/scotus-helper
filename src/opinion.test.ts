@@ -1,4 +1,4 @@
-import { buildFilename, type OpinionMetaData } from "./opinionUtils";
+import { buildFilename, type OpinionMetaData } from "./opinion";
 
 const BASE: OpinionMetaData = {
   opinionType: "merits",

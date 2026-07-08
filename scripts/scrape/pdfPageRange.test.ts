@@ -1,6 +1,6 @@
 import type { InfoResult, PageLinkResult } from "pdf-parse";
 
-import type { OpinionMetaData } from "@/src/libs/opinionUtils";
+import { type OpinionMetaData } from "@/src/opinion";
 import {
   parsePdfViewerPage,
   pdfBaseUrl,

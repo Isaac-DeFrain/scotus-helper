@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 
+import { langsmithCallOptions } from "./langsmith/langsmithTracing";
 import { openaiClient } from "./openai";
 
 export const CASE_SUMMARY_MODEL = "gpt-4o-mini";
@@ -32,22 +33,25 @@ export async function summarizeCase(
   text: string,
 ): Promise<CaseSummaryResult> {
   const openai = openaiClient();
-  const completion = await openai.chat.completions.create({
-    model: CASE_SUMMARY_MODEL,
-    temperature: 0.2,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: `Summarize the following Supreme Court opinion:
+  const completion = await openai.chat.completions.create(
+    {
+      model: CASE_SUMMARY_MODEL,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Summarize the following Supreme Court opinion:
 
 Case name: ${caseName}
 
 Opinion text:
 ${text}`,
-      },
-    ],
-  });
+        },
+      ],
+    },
+    langsmithCallOptions("summary"),
+  );
 
   return {
     caseName,

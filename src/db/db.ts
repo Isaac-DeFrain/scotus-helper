@@ -6,7 +6,7 @@
 
 import BetterSqlite3 from "better-sqlite3";
 import { ColumnType, Generated, Kysely, SqliteDialect } from "kysely";
-import { OpinionType } from "./libs/opinionUtils";
+import { OpinionType } from "../opinion";
 import fs from "fs";
 import path from "path";
 

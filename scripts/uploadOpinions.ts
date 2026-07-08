@@ -23,13 +23,13 @@ import OpenAI, { APIError } from "openai";
 import dotenv from "dotenv";
 import { Kysely } from "kysely";
 
-import { openDb, type AppDatabase, countChunks } from "@/src/db";
-import { Chunk, chunkText } from "@/src/libs/chunking";
+import { openDb, type AppDatabase, countChunks } from "@/src/db/db";
+import { Chunk, chunkText } from "@/src/chunking";
 import {
   connectWeaviateOrExit,
   weaviateChunkRowSchema,
   type WeaviateChunkRow,
-} from "@/src/libs/weaviateClient";
+} from "@/src/weaviate";
 import {
   BATCH_SIZE,
   CHARS_PER_TOKEN,
@@ -44,8 +44,8 @@ import {
   SQLITE_INSERT_BATCH_SIZE,
   WEAVIATE_COLLECTION_NAME,
 } from "@/src/constants";
-import { delay } from "@/src/libs/utils";
-import { OpinionChunk, toOpinionChunk } from "@/src/libs/opinionUtils";
+import { delay } from "@/src/utils";
+import { OpinionChunk, toOpinionChunk } from "@/src/opinion";
 
 dotenv.config();
 
