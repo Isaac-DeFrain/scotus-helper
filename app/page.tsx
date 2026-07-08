@@ -1,12 +1,5 @@
-import { ChatPage } from "./ChatPage";
-import { FooterBar } from "./FooterBar";
-import styles from "./page.module.css";
+import { PageShell } from "./PageShell";
 
 export default function Home() {
-  return (
-    <div className={styles.container}>
-      <ChatPage />
-      <FooterBar />
-    </div>
-  );
+  return <PageShell />;
 }

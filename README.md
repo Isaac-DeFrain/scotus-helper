@@ -50,7 +50,7 @@ flowchart LR
 
     CTX --> RR[Cohere rerank]
     RR --> GPT[gpt-4o stream]
-    GPT --> OUT[Response + X-Sources]
+    GPT --> OUT[Response + stream metadata]
 ```
 
 1. **Selector** (`gpt-4o-mini`) — normalizes the query, checks whether it is on-topic, and picks a retrieval strategy: `sql`, `vector`, `both`, or `none`. Off-topic queries are rejected with `400`.
@@ -58,7 +58,53 @@ flowchart LR
    - **Vector**: embeds the query (`text-embedding-3-small`) and searches Weaviate for the most similar opinion chunks.
    - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`). When no vector chunks were retrieved, matching rows are loaded from `opinion_chunks` by case name.
 3. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
-4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations are returned in the `X-Sources` response header as a base64-encoded JSON array.
+4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations and query stats are appended to the response body as a base64-encoded JSON suffix.
+
+### Chat persistence and history
+
+Each chat request is persisted locally in SQLite at `data/chat.db` (separate from `data/opinions.db`):
+
+- `chat_queries` — user messages
+- `chat_responses` — assistant responses, sources, totals, and status
+- `chat_step_costs` — per-step cost, duration, and JSON-serialized LLM/pipeline outputs
+
+Step outputs include selector routing JSON, generated SQL + result rows, case summaries, reranked context snippets, the chat prompt/response, and vector-search chunk metadata. Large text fields are truncated before storage.
+
+- `chat_queries` — user messages (scoped by `user_id`)
+
+Each browser gets a stable anonymous `userId` stored in localStorage and sent with every chat and analytics request. History and analytics endpoints require `userId` and only return rows owned by that user.
+
+The chat page shows a fixed **History** panel on the right (overlay drawer on narrow screens) with truncated previews and time/cost stats. Click an item to open `/history/:id`, which shows the full question, answer, per-step pipeline outputs (each LLM step links to its LangSmith run when tracing is enabled), and the LangSmith trace tree. Use **Ctrl+↑** / **Ctrl+↓** to move between exchanges in the history list.
+
+#### Analytics API
+
+All analytics endpoints require a `userId` query parameter and return only that user's data.
+
+| Endpoint | Description |
+| -------- | ----------- |
+| `GET /api/analytics/summary?userId=` | Aggregate query count, total/avg cost and duration, per-step totals |
+| `GET /api/analytics/queries?userId=&limit=50&offset=0&since=&until=` | Paginated list of exchanges (newest first) |
+| `GET /api/analytics/queries/:id?userId=` | Full exchange with sources and step breakdown |
+| `GET /api/analytics/queries/:id/trace?userId=` | LangSmith trace tree plus per-step run URLs (requires `LANGSMITH_API_KEY`) |
+
+`POST /api/chat` requires `{ "query": "...", "userId": "..." }`.
+
+Example summary response:
+
+```json
+{
+  "queryCount": 12,
+  "totalCostUsd": 0.084,
+  "totalDurationMs": 48200,
+  "avgCostUsd": 0.007,
+  "avgDurationMs": 4016,
+  "stepBreakdown": [
+    { "step": "selector", "label": "Selector", "costUsd": 0.001, "durationMs": 420 }
+  ]
+}
+```
+
+Query params `since` and `until` are Unix epoch seconds. `userId` is a client-generated identifier (not authentication); do not expose these endpoints publicly without proper auth.
 
 ## Setup
 
@@ -128,6 +174,12 @@ make up dev
 
 The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
 
+To reclaim disk space from stopped containers, unused networks, and dangling images:
+
+```shell
+make prune
+```
+
 ### Automatic daily sync (cron)
 
 The `cron` service runs `scrape-opinions` followed by `upload-opinions` every day at **08:00 UTC**. It starts automatically with `make up dev`.
@@ -137,6 +189,7 @@ View its output:
 ```shell
 make logs cron
 make logs follow cron   # tail -f
+make logs not weaviate  # all services except weaviate
 ```
 
 To change the schedule, edit the `RUN echo "0 8 * * * …"` line in `Dockerfile.cron` using standard cron syntax, then rebuild:
@@ -209,7 +262,7 @@ Response shape:
 
 ### `POST /api/sql-query-generator`
 
-Takes a normalized user query (from the [selector](./src/libs/selector.ts)) and returns a read-only `SELECT` for the [SQLite schema](./src/db.ts) (`gpt-4o`, LangSmith-wrapped). Used by the chat flow when structured retrieval is needed.
+Takes a normalized user query (from the [selector](./src/api/selector.ts)) and returns a read-only `SELECT` for the [SQLite schema](./src/db/db.ts) (`gpt-4o`, LangSmith-wrapped). Used by the chat flow when structured retrieval is needed.
 
 Request shape:
 
@@ -228,7 +281,7 @@ Response shape:
 
 ### `POST /api/chat`
 
-Runs the selector in-process, retrieves context via vector search and/or SQL as needed, reranks the results with Cohere, then streams a `gpt-4o` response. Off-topic queries are rejected with `400`. Source citations are returned in the `X-Sources` response header as a base64-encoded JSON array. See the [Architecture](#architecture) section for the full flow.
+Runs the selector in-process, retrieves context via vector search and/or SQL as needed, reranks the results with Cohere, then streams a `gpt-4o` response. Off-topic queries are rejected with `400`. Source citations and query stats are appended to the response body as a base64-encoded JSON suffix. When LangSmith tracing is enabled, the root trace id is returned in `X-LangSmith-Trace-Id` and stored on the query row for lookup via the analytics API. See the [Architecture](#architecture) section for the full flow.
 
 Request shape:
 
@@ -239,13 +292,17 @@ Request shape:
 Response shape:
 
 ```ts
-// Streaming plain-text body; X-Sources header contains base64-encoded JSON:
+// Streaming plain-text body with appended metadata suffix (sources + stats);
+// response headers:
+// - X-LangSmith-Trace-Id: root LangSmith trace id (when tracing is enabled)
 Array<{
   caseName: string;
   docket?: string;
   pdfUrl: string;
 }>
 ```
+
+Analytics exchange objects include `langsmithTraceId` when tracing was active for that request.
 
 ## Tech stack
 

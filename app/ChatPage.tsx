@@ -11,27 +11,28 @@ import Image from "next/image";
 import { v4 as uuidv4 } from "uuid";
 
 import { ChatMarkdown } from "./ChatMarkdown";
+import { StatsBreakdown } from "./history/StatsBreakdown";
 import { ThemeToggle } from "./ThemeToggle";
 import styles from "./page.module.css";
-import type { Source } from "@/src/libs/chat";
-import {
-  formatCost,
-  formatDuration,
-  type QueryStats,
-  type QueryStepCost,
-} from "@/src/libs/queryCost";
-import {
-  base64JsonToSources,
-  splitStreamContentAndStats,
-} from "@/src/libs/utils";
+import type { Source } from "@/src/chat/chat";
+import { formatCost, formatDuration, type QueryStats } from "@/src/queryCost";
+import { splitStreamContentAndStats } from "@/src/utils";
 
-type ChatMessage = {
+export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
   stats?: QueryStats;
   variant?: "default" | "error";
+};
+
+type ChatPageProps = {
+  userId: string;
+  onChatComplete?: () => void;
+  onStreamingChange?: (isStreaming: boolean) => void;
+  onInputValueChange?: (value: string) => void;
+  onInputFocusChange?: (focused: boolean) => void;
 };
 
 function appendErrorMessage(
@@ -49,52 +50,13 @@ function appendErrorMessage(
   ]);
 }
 
-function formatStepValue(
-  step: QueryStepCost,
-  metric: "duration" | "cost",
-): string {
-  return metric === "duration"
-    ? formatDuration(step.durationMs)
-    : formatCost(step.costUsd);
-}
-
-function StatsBreakdown({
-  label,
-  summary,
-  metric,
-  breakdown,
-}: {
-  label: string;
-  summary: string;
-  metric: "duration" | "cost";
-  breakdown: QueryStepCost[];
-}) {
-  return (
-    <span className={styles.statsTrigger} tabIndex={0}>
-      {summary}
-      <span className={styles.statsPopover} role="tooltip">
-        <span className={styles.statsPopoverTitle}>{label}</span>
-        <ul className={styles.statsPopoverList}>
-          {breakdown.map((step) => (
-            <li key={step.step} className={styles.statsPopoverItem}>
-              <span className={styles.statsPopoverRow}>
-                <span className={styles.statsPopoverStep}>{step.label}</span>
-                <span className={styles.statsPopoverValue}>
-                  {formatStepValue(step, metric)}
-                </span>
-              </span>
-              <span className={styles.statsPopoverDesc}>
-                {step.description}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </span>
-    </span>
-  );
-}
-
-export function ChatPage() {
+export function ChatPage({
+  userId,
+  onChatComplete,
+  onStreamingChange,
+  onInputValueChange,
+  onInputFocusChange,
+}: ChatPageProps) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -104,6 +66,14 @@ export function ChatPage() {
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
+
+  useEffect(() => {
+    onStreamingChange?.(isStreaming);
+  }, [isStreaming, onStreamingChange]);
+
+  useEffect(() => {
+    onInputValueChange?.(input);
+  }, [input, onInputValueChange]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -129,7 +99,7 @@ export function ChatPage() {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: userInput }),
+        body: JSON.stringify({ query: userInput, userId }),
       });
 
       if (!response.ok) {
@@ -145,18 +115,15 @@ export function ChatPage() {
         }
         console.error("Error from chat API:", errorText);
         appendErrorMessage(setMessages, errorText);
+        onChatComplete?.();
         return;
       }
 
       const assistantMessageId = uuidv4();
-      const rawSources = response.headers.get("X-Sources");
-      const sources: Source[] = rawSources
-        ? base64JsonToSources(rawSources)
-        : [];
 
       setMessages((prev) => [
         ...prev,
-        { id: assistantMessageId, role: "assistant", content: "", sources },
+        { id: assistantMessageId, role: "assistant", content: "" },
       ]);
 
       const reader = response.body?.getReader();
@@ -180,7 +147,8 @@ export function ChatPage() {
       }
 
       assistantResponse += decoder.decode();
-      const { content, stats } = splitStreamContentAndStats(assistantResponse);
+      const { content, stats, sources } =
+        splitStreamContentAndStats(assistantResponse);
 
       setMessages((prev) =>
         prev.map((msg) =>
@@ -189,10 +157,12 @@ export function ChatPage() {
                 ...msg,
                 content,
                 stats,
+                sources,
               }
             : msg,
         ),
       );
+      onChatComplete?.();
     } catch (error) {
       console.error("Error in chat:", error);
       const message =
@@ -200,6 +170,7 @@ export function ChatPage() {
           ? error.message
           : "Something went wrong. Please try again.";
       appendErrorMessage(setMessages, message);
+      onChatComplete?.();
     } finally {
       setIsStreaming(false);
       inputRef.current?.focus();
@@ -297,7 +268,7 @@ export function ChatPage() {
                 <div className={styles.sources}>
                   {message.sources.map((s) => (
                     <a
-                      key={s.docket}
+                      key={s.docket ?? s.caseName}
                       href={s.pdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -328,6 +299,8 @@ export function ChatPage() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={() => onInputFocusChange?.(true)}
+            onBlur={() => onInputFocusChange?.(false)}
             placeholder="Ask a question about SCOTUS opinions..."
             className={styles.input}
             disabled={isStreaming}
