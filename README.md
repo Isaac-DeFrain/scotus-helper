@@ -60,17 +60,41 @@ flowchart LR
 3. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
 4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations and query stats are appended to the response body as a base64-encoded JSON suffix.
 
+Exchanges are persisted to `chat.db` throughout this flow; see [Chat persistence and history](#chat-persistence-and-history).
+
 ### Chat persistence and history
 
-Each chat request is persisted locally in SQLite at `data/chat.db` (separate from `data/opinions.db`):
+Each chat request is persisted locally in SQLite (separate from `data/opinions.db`). Local dev uses `data/chat.db`; Docker stores chat analytics on a named volume at `/app/chat-data/chat.db` so the app can write without depending on `./data` ownership from scrape/cron. Persistence runs alongside the chat pipeline; write failures are logged but never fail the HTTP response.
 
-- `chat_queries` — user messages
-- `chat_responses` — assistant responses, sources, totals, and status
+```mermaid
+flowchart LR
+    UI[Browser<br/>userId in localStorage] -->|POST /api/chat| CHAT[/api/chat]
+    UI -->|GET /api/analytics/*| AN[/api/analytics]
+
+    subgraph write [Write path during chat]
+        direction TB
+        W1[persistChatQuery<br/>raw message]
+        W2[persistNormalizedQuery<br/>after selector]
+        W3[persistLangSmithTraceId<br/>on trace start]
+        W4[persistChatResponse<br/>success / error / interrupted]
+        W1 --> W2 --> W4
+    end
+
+    CHAT --> write
+    W1 & W2 & W3 & W4 --> DB[(SQLite: chat.db)]
+    AN -->|scoped by userId| DB
+
+    Hist[History sidebar<br/>/history/:id] --> AN
+    UI --> Hist
+```
+
+Tables in `chat.db`:
+
+- `chat_queries` — user messages (scoped by `user_id`), normalized query, LangSmith trace id
+- `chat_responses` — assistant responses, sources, totals, and status (`success`, `error`, or `interrupted`)
 - `chat_step_costs` — per-step cost, duration, and JSON-serialized LLM/pipeline outputs
 
 Step outputs include selector routing JSON, generated SQL + result rows, case summaries, reranked context snippets, the chat prompt/response, and vector-search chunk metadata. Large text fields are truncated before storage.
-
-- `chat_queries` — user messages (scoped by `user_id`)
 
 Each browser gets a stable anonymous `userId` stored in localStorage and sent with every chat and analytics request. History and analytics endpoints require `userId` and only return rows owned by that user.
 
@@ -172,7 +196,7 @@ cp .env.example .env   # fill in OPENAI_API_KEY, COHERE_API_KEY
 make up dev
 ```
 
-The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`).
+The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`). Chat history is persisted in a separate named volume (`chat_data`); the app mounts `./data` read-only for `opinions.db`.
 
 To reclaim disk space from stopped containers, unused networks, and dangling images:
 

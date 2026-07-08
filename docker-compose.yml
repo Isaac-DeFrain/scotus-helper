@@ -95,9 +95,11 @@ services:
     environment:
       <<: *common-env
       WEAVIATE_URL: http://weaviate:8080
+      CHAT_DB_PATH: /app/chat-data/chat.db
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data:ro
+      - chat_data:/app/chat-data
 
   # The service that runs the cron jobs.
   cron:
@@ -133,6 +135,7 @@ services:
         condition: service_started
     restart: unless-stopped
 
-# The volume that stores the Weaviate data.
+# Named volumes for Weaviate and chat analytics (app writes chat.db here).
 volumes:
   weaviate_data:
+  chat_data:

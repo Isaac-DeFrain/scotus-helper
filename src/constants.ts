@@ -9,7 +9,9 @@ export const BASE_URL = "https://www.supremecourt.gov";
 export const DELAY_MS = 300;
 
 export const DB_PATH = path.join(process.cwd(), "data", "opinions.db");
-export const CHAT_DB_PATH = path.join(process.cwd(), "data", "chat.db");
+export const CHAT_DB_PATH =
+  process.env.CHAT_DB_PATH?.trim() ||
+  path.join(process.cwd(), "data", "chat.db");
 export const OPINIONS_DIR = path.join(process.cwd(), "data", "opinions");
 
 export const CHUNK_SIZE = 500;

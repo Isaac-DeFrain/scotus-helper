@@ -1,15 +1,6 @@
 import { GITHUB_REPO_URL } from "./constants";
 import { formatVersionResponse, getGitCommit } from "./buildInfo";
-
-function restoreEnvVars(vars: Record<string, string | undefined>) {
-  for (const key in vars) {
-    if (vars[key] === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = vars[key];
-    }
-  }
-}
+import { restoreEnvVars } from "./test/restoreEnvVars";
 
 describe("getGitCommit", () => {
   const gitCommitEnv = process.env.GIT_COMMIT;
