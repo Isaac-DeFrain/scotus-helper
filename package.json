@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown) next dev",
-    "build": "GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo unknown) next build",
+    "build": "GIT_COMMIT=\"${GIT_COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}\" next build",
     "start": "next start",
     "check": "npx tsc",
     "lint": "eslint .",
