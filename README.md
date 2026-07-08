@@ -180,7 +180,7 @@ Follow these steps or see [Docker](#docker):
 
 The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together. A `Makefile` wraps every `docker compose` command and automatically injects your host `UID`/`GID` as build args and runtime user IDs so files written into the `./data` volume are owned by you, not root.
 
-All data-writing services run as `${UID}:${GID}`: `scrape`, `upload`, and `app`. The `cron` container stays root (required by `crond`), but its scheduled sync job runs as the same UID/GID via a user crontab in `Dockerfile.cron`. On a VPS without `make`, set `UID` and `GID` in your shell or `.env` if your deploy user is not `1000:1000`.
+All data-writing services run as `${UID}:${GID}`: `scrape`, `upload`, and `app` (the app entrypoint chowns the `chat_data` named volume on startup, then drops privileges). The `cron` container stays root (required by `crond`), but its scheduled sync job runs as the same UID/GID via a user crontab in `Dockerfile.cron`. On a VPS without `make`, set `UID` and `GID` in your shell or `.env` if your deploy user is not `1000:1000`.
 
 ### Production releases
 

@@ -1,5 +1,6 @@
 # data — db is the source of truth; raw JSON backups are large
 data/
+chat-data/
 
 # dev
 .direnv

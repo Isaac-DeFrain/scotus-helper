@@ -37,6 +37,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV GIT_COMMIT=$GIT_COMMIT
 
+RUN apk add --no-cache su-exec
+
 RUN set -eux; \
     existing_group="$(getent group "${GID}" | cut -d: -f1 || true)"; \
     if [ -n "${existing_group}" ]; then \
@@ -53,11 +55,16 @@ COPY --from=builder --chown=${UID}:${GID} /app/.next/standalone ./
 COPY --from=builder --chown=${UID}:${GID} /app/.next/static ./.next/static
 COPY --from=builder --chown=${UID}:${GID} /app/public ./public
 
-USER ${UID}:${GID}
+COPY scripts/docker/app-entrypoint.sh /app/scripts/docker/app-entrypoint.sh
+RUN chmod +x /app/scripts/docker/app-entrypoint.sh
+
+ENV APP_UID=${UID}
+ENV APP_GID=${GID}
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+ENTRYPOINT ["/app/scripts/docker/app-entrypoint.sh"]
 CMD ["node", "server.js"]
