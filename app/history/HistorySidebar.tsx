@@ -1,6 +1,6 @@
 /**
- * Collapsible query-history sidebar: list of past exchanges, aggregate stats,
- * and helpers for loading, scrolling to, and stashing list-item DOM refs.
+ * Collapsible left query-history sidebar: list of past exchanges, aggregate
+ * stats, and helpers for loading, scrolling to, and stashing list-item DOM refs.
  */
 
 "use client";
@@ -38,8 +38,8 @@ function statusLabel(status: ExchangeSummary["status"]): string | null {
 }
 
 /**
- * Renders the history toggle and aside: aggregate summary, then each exchange
- * as a link with query/response previews and per-item duration/cost breakdowns.
+ * Renders the history toggle and left aside: aggregate summary, then each
+ * exchange as a link with query/response previews and per-item stats.
  */
 export function HistorySidebar({
   items,
@@ -52,15 +52,17 @@ export function HistorySidebar({
 }: HistorySidebarProps) {
   return (
     <div className={styles.historyColumn}>
-      <button
-        type="button"
-        className={styles.historyToggle}
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        aria-controls="history-sidebar"
-      >
-        History
-      </button>
+      {!isOpen && (
+        <button
+          type="button"
+          className={styles.historyToggle}
+          onClick={onToggle}
+          aria-expanded={false}
+          aria-controls="history-sidebar"
+        >
+          Chat History
+        </button>
+      )}
 
       <aside
         id="history-sidebar"
@@ -69,9 +71,22 @@ export function HistorySidebar({
           isOpen ? styles.historySidebarOpen : "",
         ].join(" ")}
         aria-label="Query history"
+        aria-hidden={!isOpen}
       >
         <div className={styles.historyHeader}>
-          <h2 className={styles.historyTitle}>Chat History</h2>
+          <div className={styles.historyHeaderRow}>
+            <h2 className={styles.historyTitle}>Chat History</h2>
+            <button
+              type="button"
+              className={styles.historyCollapse}
+              onClick={onToggle}
+              aria-expanded={true}
+              aria-controls="history-sidebar"
+              aria-label="Collapse history"
+            >
+              Hide
+            </button>
+          </div>
           {summary && (
             <div className={styles.historySummary}>
               {summary.queryCount} queries ·{" "}
