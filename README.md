@@ -157,7 +157,7 @@ cp .env.example .env   # fill in OPENAI_API_KEY, COHERE_API_KEY
 make up dev
 ```
 
-The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`); the app mounts `./data` read-only for `opinions.db`. Chat history is written to a named volume (`chat_data`) at `CHAT_DB_PATH` (`/app/chat-data/chat.db`).
+The app will be available at `http://localhost:80`. Weaviate data is persisted in a named Docker volume (`weaviate_data`); the app mounts `./data` read-only for `opinions.db`. Chat history is written to a named volume (`chat_data`) at `CHAT_DB_PATH` (`/app/chat-data/chat.db`).
 
 To reclaim disk space from stopped containers, unused networks, and dangling images:
 
