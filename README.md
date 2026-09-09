@@ -48,87 +48,46 @@ flowchart LR
     SQ -.->|fallback chunks| OC[(SQLite: opinion_chunks)]
     OC --> CTX
 
-    CTX --> RR[Cohere rerank]
+    CTX --> SUM["Case summaries<br/>gpt-4o-mini when isSummary"]
+    SUM --> RR[Cohere rerank]
     RR --> GPT[gpt-4o stream]
     GPT --> OUT[Response + stream metadata]
 ```
 
-1. **Selector** (`gpt-4o-mini`) — normalizes the query, checks whether it is on-topic, and picks a retrieval strategy: `sql`, `vector`, `both`, or `none`. Off-topic queries are rejected with `400`.
+1. **Selector** (`gpt-4o-mini`) — normalizes the query, checks whether it is on-topic, sets `isSummary` when the user is asking for a case summary, and picks a retrieval strategy: `sql`, `vector`, `both`, or `none`. Off-topic queries are rejected with `400`.
 2. **Retrieval** — runs as needed based on the selector's decision:
    - **Vector**: embeds the query (`text-embedding-3-small`) and searches Weaviate for the most similar opinion chunks.
-   - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`). When no vector chunks were retrieved, matching rows are loaded from `opinion_chunks` by case name.
-3. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
-4. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations and query stats are appended to the response body as a base64-encoded JSON suffix.
+   - **SQL**: generates and executes a read-only `SELECT` against SQLite (`gpt-4o`). When there are no vector chunks, the query is not a summary, and the SQL rows lack a `text` column, matching rows are loaded from `opinion_chunks` by case name (for citation links).
+3. **Case summarization** (`gpt-4o-mini`) — when `isSummary` is true and SQL rows include opinion text, produces a per-case summary before reranking.
+4. **Reranking** (Cohere `rerank-v3.5`) — scores and reorders the combined retrieval results to surface the most relevant context.
+5. **Generation** (`gpt-4o`) — streams an answer grounded in the reranked context. Source citations and query stats are appended to the response body as an HTML-comment suffix containing base64-encoded JSON (`<!--SCOTUS_QUERY_META:…-->`).
 
-Exchanges are persisted to `chat.db` throughout this flow; see [Chat persistence and history](#chat-persistence-and-history).
+Exchanges are persisted server-side after each chat; see [Chat history](#chat-history).
 
-### Chat persistence and history
+### Chat history
 
-Each chat request is persisted locally in SQLite (separate from `data/opinions.db`). Local dev uses `data/chat.db`; Docker stores chat analytics on a named volume at `/app/chat-data/chat.db` so the app can write without depending on `./data` ownership from scrape/cron. Persistence runs alongside the chat pipeline; write failures are logged but never fail the HTTP response.
+Chat exchanges (question, answer, sources, cost/duration stats, per-step pipeline outputs, and optional LangSmith trace id) are persisted server-side in SQLite (`data/chat.db`, or `CHAT_DB_PATH`). The browser keeps only an anonymous `userId` in `localStorage` so the history sidebar and `/history/:id` can scope analytics requests to that client.
 
 ```mermaid
 flowchart LR
-    UI["Browser<br/>userId in localStorage"] -->|"POST /api/chat"| CHAT["/api/chat"]
-    UI -->|"GET /api/analytics/*"| AN["/api/analytics"]
-
-    subgraph write [Write path during chat]
-        direction TB
-        W1["persistChatQuery<br/>raw message"]
-        W2["persistNormalizedQuery<br/>after selector"]
-        W3["persistLangSmithTraceId<br/>on trace start"]
-        W4["persistChatResponse<br/>success / error / interrupted"]
-        W1 --> W2 --> W4
-    end
-
-    CHAT --> write
-    W1 & W2 & W3 & W4 --> DB[("SQLite: chat.db")]
-    AN -->|"scoped by userId"| DB
-
-    Hist["History sidebar<br/>/history/:id"] --> AN
-    UI --> Hist
+    UI["Browser"] -->|"POST /api/chat {query, userId}"| CHAT["/api/chat"]
+    CHAT -->|"persist"| CDB[("chat.db")]
+    CHAT -->|"stream + X-LangSmith-Trace-Id"| UI
+    Hist["History sidebar<br/>/history/:id"] -->|"GET /api/analytics/... ?userId="| AN["/api/analytics"]
+    AN --> CDB
+    Hist -->|"GET .../queries/[id]/trace"| LS_API["LangSmith proxy"]
 ```
 
-Tables in `chat.db`:
-
-- `chat_queries` — user messages (scoped by `user_id`), normalized query, LangSmith trace id
-- `chat_responses` — assistant responses, sources, totals, and status (`success`, `error`, or `interrupted`)
-- `chat_step_costs` — per-step cost, duration, and JSON-serialized LLM/pipeline outputs
-
-Step outputs include selector routing JSON, generated SQL + result rows, case summaries, reranked context snippets, the chat prompt/response, and vector-search chunk metadata. Large text fields are truncated before storage.
-
-Each browser gets a stable anonymous `userId` stored in localStorage and sent with every chat and analytics request. History and analytics endpoints require `userId` and only return rows owned by that user.
-
-The chat page shows a fixed **History** panel on the right (overlay drawer on narrow screens) with truncated previews and time/cost stats. Click an item to open `/history/:id`, which shows the full question, answer, per-step pipeline outputs (each LLM step links to its LangSmith run when tracing is enabled), and the LangSmith trace tree. Use **Ctrl+↑** / **Ctrl+↓** to move between exchanges in the history list.
-
-#### Analytics API
-
-All analytics endpoints require a `userId` query parameter and return only that user's data.
+The chat page shows a collapsible **History** panel on the left (overlay drawer on narrow screens) with truncated previews and time/cost stats. Click an item to open `/history/:id`, which shows the full question, answer, per-step timing/cost and stored step outputs (each LLM step links to its LangSmith run when tracing is enabled), and the LangSmith trace tree. Use **Ctrl+↑** / **Ctrl+↓** to move between exchanges in the history list.
 
 | Endpoint | Description |
 | -------- | ----------- |
-| `GET /api/analytics/summary?userId=` | Aggregate query count, total/avg cost and duration, per-step totals |
-| `GET /api/analytics/queries?userId=&limit=50&offset=0&since=&until=` | Paginated list of exchanges (newest first) |
-| `GET /api/analytics/queries/:id?userId=` | Full exchange with sources and step breakdown |
-| `GET /api/analytics/queries/:id/trace?userId=` | LangSmith trace tree plus per-step run URLs (requires `LANGSMITH_API_KEY`) |
+| `GET /api/analytics/queries` | Paginated exchange list (`userId`, `limit`, `offset`, optional time bounds) |
+| `GET /api/analytics/queries/[id]` | Full exchange detail, including step costs and outputs |
+| `GET /api/analytics/queries/[id]/trace` | LangSmith trace tree plus per-step run URLs (requires `LANGSMITH_API_KEY`) |
+| `GET /api/analytics/summary` | Aggregate cost/duration stats for the scoped user |
 
-`POST /api/chat` requires `{ "query": "...", "userId": "..." }`.
-
-Example summary response:
-
-```json
-{
-  "queryCount": 12,
-  "totalCostUsd": 0.084,
-  "totalDurationMs": 48200,
-  "avgCostUsd": 0.007,
-  "avgDurationMs": 4016,
-  "stepBreakdown": [
-    { "step": "selector", "label": "Selector", "costUsd": 0.001, "durationMs": 420 }
-  ]
-}
-```
-
-Query params `since` and `until` are Unix epoch seconds. `userId` is a client-generated identifier (not authentication); do not expose these endpoints publicly without proper auth.
+`POST /api/chat` accepts `{ "query": "...", "userId": "..." }`.
 
 ## Setup
 
@@ -180,7 +139,7 @@ Follow these steps or see [Docker](#docker):
 
 The repo includes a multi-stage `Dockerfile` and a `docker-compose.yml` that bring up the Next.js web app and Weaviate together. A `Makefile` wraps every `docker compose` command and automatically injects your host `UID`/`GID` as build args and runtime user IDs so files written into the `./data` volume are owned by you, not root.
 
-All data-writing services run as `${UID}:${GID}`: `scrape`, `upload`, and `app` (the app entrypoint chowns the `chat_data` named volume on startup, then drops privileges). The `cron` container stays root (required by `crond`), but its scheduled sync job runs as the same UID/GID via a user crontab in `Dockerfile.cron`. On a VPS without `make`, set `UID` and `GID` in your shell or `.env` if your deploy user is not `1000:1000`.
+All data-writing services run as `${UID}:${GID}`: `scrape`, `upload`, and `app` (the app entrypoint drops privileges on startup). The `cron` container stays root (required by `crond`), but its scheduled sync job runs as the same UID/GID via a user crontab in `Dockerfile.cron`. On a VPS without `make`, set `UID` and `GID` in your shell or `.env` if your deploy user is not `1000:1000`.
 
 ### Production releases
 
@@ -198,7 +157,7 @@ cp .env.example .env   # fill in OPENAI_API_KEY, COHERE_API_KEY
 make up dev
 ```
 
-The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`). Chat history is persisted in a separate named volume (`chat_data`); the app mounts `./data` read-only for `opinions.db`.
+The app will be available at `http://localhost:3000`. Weaviate data is persisted in a named Docker volume (`weaviate_data`); the app mounts `./data` read-only for `opinions.db`. Chat history is written to a named volume (`chat_data`) at `CHAT_DB_PATH` (`/app/chat-data/chat.db`).
 
 To reclaim disk space from stopped containers, unused networks, and dangling images:
 
@@ -267,7 +226,7 @@ npm test
 
 ### `POST /api/selector`
 
-Normalizes the query, checks whether it is on-topic for U.S. Supreme Court opinions, and picks a retrieval strategy. Uses `gpt-4o-mini` (LangSmith-wrapped).
+Normalizes the query, checks whether it is on-topic for U.S. Supreme Court opinions, detects summary requests, and picks a retrieval strategy. Uses `gpt-4o-mini` (LangSmith-wrapped).
 
 Request shape:
 
@@ -281,6 +240,7 @@ Response shape:
 {
   normalizedQuery: string;
   isOnTopic: boolean;
+  isSummary: boolean;
   queryType: "sql" | "vector" | "both" | "none";
   reason: string;
 }
@@ -307,25 +267,30 @@ Response shape:
 
 ### `POST /api/chat`
 
-Runs the selector in-process, retrieves context via vector search and/or SQL as needed, reranks the results with Cohere, then streams a `gpt-4o` response. Off-topic queries are rejected with `400`. Source citations and query stats are appended to the response body as a base64-encoded JSON suffix. When LangSmith tracing is enabled, the root trace id is returned in `X-LangSmith-Trace-Id` and stored on the query row for lookup via the analytics API. See the [Architecture](#architecture) section for the full flow.
+Runs the selector in-process, retrieves context via vector search and/or SQL as needed, optionally summarizes cases (`gpt-4o-mini` when `isSummary`), reranks with Cohere, then streams a `gpt-4o` response. Off-topic queries are rejected with `400`. Sources and query stats are appended as an HTML-comment suffix with base64-encoded JSON (`<!--SCOTUS_QUERY_META:…-->`). Successful, failed, and interrupted exchanges are persisted to `chat.db`. When LangSmith tracing is enabled, the root trace id is returned in `X-LangSmith-Trace-Id` and stored on the exchange; the history detail page loads the tree via `GET /api/analytics/queries/[id]/trace`. See the [Architecture](#architecture) section for the full flow.
 
 Request shape:
 
 ```ts
-{ query: string }
+{ query: string; userId?: string | null }
 ```
 
 Response shape:
 
 ```ts
-// Streaming plain-text body with appended metadata suffix (sources + stats);
+// Streaming text/plain body; trailing suffix:
+// <!--SCOTUS_QUERY_META:<base64 JSON>-->
+// Decoded payload: { stats: QueryStats; sources?: Source[] }
+// (sources omitted when empty; legacy payloads may be QueryStats alone)
+//
 // response headers:
 // - X-LangSmith-Trace-Id: root LangSmith trace id (when tracing is enabled)
-Array<{
+
+type Source = {
   caseName: string;
   docket?: string;
   pdfUrl: string;
-}>
+};
 ```
 
 Analytics exchange objects include `langsmithTraceId` when tracing was active for that request.
@@ -335,9 +300,10 @@ Analytics exchange objects include `langsmithTraceId` when tracing was active fo
 - **Web framework**: Next.js 15 (React 19, App Router)
 - **Scraping**: axios + cheerio
 - **PDF extraction**: pdf-parse
-- **Database**: SQLite via better-sqlite3 + Kysely (type-safe query builder)
+- **Database**: SQLite via better-sqlite3 + Kysely — `opinions.db` (corpus) and `chat.db` (history / analytics)
 - **Embeddings**: OpenAI `text-embedding-3-small`
-- **Query routing**: OpenAI `gpt-4o-mini` (selector: normalize + topic filter + SQL/vector/both)
+- **Query routing**: OpenAI `gpt-4o-mini` (selector: normalize + topic filter + `isSummary` + sql/vector/both/none)
+- **Case summaries**: OpenAI `gpt-4o-mini` (when selector marks `isSummary`)
 - **Chat**: OpenAI `gpt-4o`
 - **Reranking**: Cohere `rerank-v3.5`
 - **Vector store**: Weaviate (local, via Docker)
