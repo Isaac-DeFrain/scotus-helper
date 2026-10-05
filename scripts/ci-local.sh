@@ -22,8 +22,8 @@ step() {
 step "install dependencies (npm ci)"
 run npm ci
 
-step "audit (npm audit --audit-level=moderate)"
-run npm audit --audit-level=moderate
+step "audit (npm run audit)"
+run npm run audit
 
 step "lint (npm run lint)"
 run npm run lint
