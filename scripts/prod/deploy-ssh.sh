@@ -1,7 +1,8 @@
 set -eo pipefail
 
 cd scotus-helper
-git pull origin main
+git fetch origin main
+git reset --hard origin/main
 
 DEPLOY_LOG_DIR="${DEPLOY_LOG_DIR:-deploy-logs}"
 mkdir -p "$DEPLOY_LOG_DIR"
