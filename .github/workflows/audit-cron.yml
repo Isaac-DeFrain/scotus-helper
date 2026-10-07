@@ -29,7 +29,7 @@ jobs:
         run: npm ci
 
       - name: Apply semver-safe audit fixes
-        run: npm audit fix
+        run: npm audit fix --omit=dev
 
       - name: Verify clean audit
         run: npm run audit
@@ -45,6 +45,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No dependency changes to commit."
           else
-            git commit -m "deps: npm audit fix"
+            git commit -m "deps: npm audit fix --omit=dev"
             git push
           fi
