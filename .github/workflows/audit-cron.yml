@@ -32,7 +32,7 @@ jobs:
         run: npm audit fix --omit=dev
 
       - name: Verify clean audit
-        run: npm run audit
+        run: npm audit --omit=dev --audit-level=moderate
 
       - name: Test
         run: npm test
