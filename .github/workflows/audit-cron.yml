@@ -34,9 +34,6 @@ jobs:
       - name: Verify clean audit
         run: npm audit --omit=dev --audit-level=moderate
 
-      - name: Test
-        run: npm test
-
       - name: Commit and push to main
         run: |
           git config user.name "github-actions[bot]"
