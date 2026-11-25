@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-NGINX_IMAGE="nginx:1.31-alpine"
+NGINX_IMAGE="nginx:1.31.10-alpine"
 
 # dev  -> nginx/dev.conf  (plain HTTP on port 80)
 # prod -> nginx/prod.conf (TLS termination, security headers, HTTP redirect)

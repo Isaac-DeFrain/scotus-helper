@@ -19,7 +19,7 @@ services:
   # The reverse proxy - the main entrypoint into the application. Holds the TLS
   # certificates.
   nginx:
-    image: nginx:1.31-alpine
+    image: nginx:1.31.10-alpine
     volumes:
       - ./nginx/prod.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
